@@ -1,10 +1,10 @@
-let previewText = ''
+let previewText = []
 
 export default function (state = previewText, action) {
   switch (action.type) {
     case 'UPDATE_TEXT': {
-      console.log(action.text)
-      return action.text
+      console.log(action.textLines)
+      return action.textLines
       break
     }
   }

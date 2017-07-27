@@ -1,10 +1,18 @@
+const _ = require('lodash')
 const COMPLETE = {
-  '_bold{': '}',
-  '_italic{': '}'
+  '\\b{': '}',
+  '\\e{': '}',
+  '\\big{': '}',
+  '\\red{': '}',
+  '\\ul{': '}',
+  '\\code{': '}',
+  '\\2page{': '}',
+  '$': '$'
 }
 
-const SPLIT_CHAR = '_'
+const SPLIT_CHAR = '\\'
 export function getComplete (word) {
+
   if (COMPLETE[word]) {
     return COMPLETE[word]
   } else {

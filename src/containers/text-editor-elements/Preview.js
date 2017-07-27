@@ -8,7 +8,11 @@ import {connect} from 'react-redux'
 class Preview extends React.Component {
   componentDidUpdate () {
     const html = translate(this.props.previewText)
-    this.previewer.innerHTML = html
+    const {previewText} = this.props
+    const previews = previewText.filter((line) => (line && line.length !== 0))
+                                .map((line) => `<div>${translate(line)}</div>`)
+    console.log(previews)
+    this.previewer.innerHTML = previews.join('')
   }
 
   componentDidMount () {
@@ -22,10 +26,9 @@ class Preview extends React.Component {
       left: '4%', bottom: '10%'
     }
     const {previewText} = this.props
-
     return (
       <div id='text-preview' style={previewStyle}>
-        {translate(previewText)}
+
       </div>
     )
   }

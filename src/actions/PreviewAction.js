@@ -1,6 +1,6 @@
-export function preview (text) {
+export function preview (textLines) {
   return {
     type: 'UPDATE_TEXT',
-    text
+    textLines
   }
 }
