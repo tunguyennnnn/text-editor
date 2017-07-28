@@ -1,22 +1,27 @@
 const _ = require('lodash')
 const katex = require('katex')
 
+const COLOR_LIST = ['red', 'green', 'orange']
+                    .map((color) => color + '{')
+
 const OPENING_CHAR = '\\'
 const OPENING_MATH = '$'
-const KEYWORDS = ['b{', 'e{', 'big{', 'ul{', 'code{', '2page{', 'red{']
+const LIST_ITEM_START = '*'
+const KEYWORDS = ['b{', 'e{', 'big{', 'ul{', 'code{', '2page{', 'red{'].concat(COLOR_LIST)
 const CLOSING_CHAR = '}'
 const WHITE_SPACE = ['\t', ' ']
 const NEW_LINE = ['\n']
 
-const NAME_MAP = {
+const NAME_MAP = _.assign({
   'b{': 'BOLD',
   'e{': 'EM',
   'big{': 'BIG',
   'ul{': 'ORDER_LIST',
+  '*': 'LIST_ITEM',
   'code{': 'CODE',
   '2page{': 'SPLIT_PAGE',
-  'red{': 'COLOR'
-}
+}, _.fromPairs(_.map(COLOR_LIST, (color) => [color, 'COLOR'])))
+
 /*
 REGEX
 */
@@ -31,8 +36,8 @@ class Tokenizer {
   }
 
   handleSpecialToken ({text, start}) {
-    console.log(text, start)
-    const match = _.filter(KEYWORDS, (keyword) => text.indexOf(keyword) !== -1)[0]
+    const match = _.filter(KEYWORDS, (keyword) => text.indexOf(keyword) === 1)[0]
+    console.log(match)
     if (match) {
       return {end: start + match.length, word: (OPENING_CHAR + match), type: NAME_MAP[match]}
     }
@@ -55,20 +60,6 @@ class Tokenizer {
         const matchPhase = text.slice(0, endMathIndex + 1)
         return {word: matchPhase, end: start + matchPhase.length, type: 'INLINE_MATH'}
       }
-      // if (index === 0) {
-      //   let i
-      //   for (i = 1; i <= text.length; i++) {
-      //     if (text[i] === '$') {
-      //       break
-      //     }
-      //   }
-      //   const matchPhase = text.slice(0, i + 1)
-      //   return {word: matchPhase, end: start + matchPhase.length, type: 'INLINE_MATH'}
-      // }
-
-      // if (index === 0) {
-      //   return {word: matchText, end: start + matchText.length, type: 'INLINE_MATH'}
-      // }
     }
   }
 
@@ -79,7 +70,6 @@ class Tokenizer {
   }
 
   tokenize (text) {
-    console.log(text)
     const len = text.length
     let startIndex = 0
     let index = 0
@@ -87,7 +77,6 @@ class Tokenizer {
     let currentWord = ''
     while (index < len) {
       char = text[index]
-      console.log(char)
       switch (char) {
         case OPENING_CHAR: {
           const specialToken = this.handleSpecialToken({text: text.slice(index), start: index + 1})
@@ -141,6 +130,14 @@ class Tokenizer {
           }
           break
         }
+        case LIST_ITEM_START: {
+          this.pushWord({start: startIndex, end: index, word: currentWord, type: 'ORDINARY'})
+          this.pushWord({start: index, end: index + 1, word: LIST_ITEM_START, type: 'LIST_ITEM'})
+          currentWord = ''
+          index += 1
+          startIndex = index
+          break
+        }
         default: {
           currentWord += char
           index += 1
@@ -167,12 +164,12 @@ const Rules = {
   'BOLD': {
     tag: '<strong>',
     closeTag: '</strong>',
-    inners: ['EM']
+    inners: ['EM', 'COLOR']
   },
   'EM': {
     tag: '<em>',
     closeTag: '</em>',
-    inners: ['BOLD']
+    inners: ['BOLD', 'COLOR']
   },
   'BIG': {
     tag: '<h4>',
@@ -185,7 +182,7 @@ const Rules = {
     inners: ['LIST_ITEM']
   },
   'LIST_ITEM': {
-    tag: '<li>',
+    tag: '<li style="padding-left: 1em">',
     closeTag: '</li>',
     inners: ['BOLD', 'EM', 'COLOR']
   },
@@ -194,6 +191,9 @@ const Rules = {
   },
   'NEWLINE_MATH': {
     inners: []
+  },
+  'COLOR': {
+    inners: ['BOLD', 'EM']
   },
   'CODE': {
     tag: '<pre>',
@@ -228,6 +228,8 @@ class Element {
       } else if (type === 'NEWLINE_MATH') {
         const math = word.replace(/\$/g, '')
         return `<div class="newline-math">${katex.renderToString(math)}</div>`
+      } else if (type === 'COLOR') {
+        return `<span style="color:${word.replace('{', '')}">${el.toHtml()}</span>`
       } else {
         const match = Rules[type]
         const {tag, closeTag} = match
@@ -336,11 +338,37 @@ class Parser {
           }
           break
         }
+        case 'ORDER_LIST': {
+          if (this.tracer.canPush(type)) {
+            const newEl = new Element({type, word, parent: this.currentNode})
+            this.currentNode.appendChild(newEl)
+            this.currentNode = newEl
+            this.tracer.push(type)
+          } else {
+
+          }
+        }
+        case 'LIST_ITEM': {
+          if (this.tracer.top() === 'LIST_ITEM') {
+            this.currentNode = this.currentNode.parent
+            tracer.pop()
+          }
+          if (this.tracer.canPush(type)) {
+            const newEl = new Element({type, word, parent: this.currentNode})
+            this.currentNode.appendChild(newEl)
+            this.currentNode = newEl
+            this.tracer.push(type)
+          } else {
+
+          }
+          break
+        }
         case 'CLOSING_CHAR': {
+          if (tracer.top() === 'LIST_ITEM') {
+            this.tracer.pop()
+          }
           this.tracer.pop()
-          console.log(this.currentNode)
           this.currentNode = this.currentNode.parent
-          console.log(this.currentNode)
           break
         }
         default: {
@@ -354,6 +382,7 @@ class Parser {
 export function translate1 (string) {
   const tokenizer = new Tokenizer()
   const tokens = tokenizer.tokenize(string)
+  console.log(tokens)
   const parsedTree = new Parser(tokens)
   return parsedTree.toHtml()
 }

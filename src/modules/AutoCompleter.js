@@ -1,5 +1,7 @@
 const _ = require('lodash')
-const COMPLETE = {
+const COLOR_LIST = ['red', 'green', 'orange']
+                    .map((color) => '\\' + color + '{')
+const COMPLETE = _.assign({}, {
   '\\b{': '}',
   '\\e{': '}',
   '\\big{': '}',
@@ -8,7 +10,7 @@ const COMPLETE = {
   '\\code{': '}',
   '\\2page{': '}',
   '$': '$'
-}
+}, _.fromPairs(_.map(COLOR_LIST, (color) => [color, '}'])))
 
 const SPLIT_CHAR = '\\'
 export function getComplete (word) {
