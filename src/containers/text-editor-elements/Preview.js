@@ -9,10 +9,11 @@ class Preview extends React.Component {
   componentDidUpdate () {
     const html = translate(this.props.previewText)
     const {previewText} = this.props
-    const previews = previewText.filter((line) => (line && line.length !== 0))
-                                .map((line) => `<div>${translate(line)}</div>`)
-    console.log(previews)
-    this.previewer.innerHTML = previews.join('')
+    // const previews = previewText.filter((line) => (line && line.length !== 0))
+    //                             .map((line) => `<div>${translate(line)}</div>`)
+    console.log(previewText.filter((line) => line))
+    const preview = `<div>${translate(previewText.filter((line) => line).join(' '))}</div>`
+    this.previewer.innerHTML = preview
   }
 
   componentDidMount () {

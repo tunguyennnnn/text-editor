@@ -8,6 +8,7 @@ const OPENING_CHAR = '\\'
 const OPENING_MATH = '$'
 const LIST_ITEM_START = '*'
 const KEYWORDS = ['b{', 'e{', 'big{', 'ul{', 'code{', '2page{', 'red{'].concat(COLOR_LIST)
+const EXTENDABLE_KEYWORDS = [/\\tb:\d+:\d+{/g, /\(header-\d+\)<-.*;/g, /\(\d+,\d+\)<-.*;/g]
 const CLOSING_CHAR = '}'
 const WHITE_SPACE = ['\t', ' ']
 const NEW_LINE = ['\n']
@@ -21,6 +22,11 @@ const NAME_MAP = _.assign({
   'code{': 'CODE',
   '2page{': 'SPLIT_PAGE',
 }, _.fromPairs(_.map(COLOR_LIST, (color) => [color, 'COLOR'])))
+
+const REGEX_MAP = {}
+REGEX_MAP[/\\tb:\d+:\d+{/g] = 'TABLE'
+REGEX_MAP[/\(header-\d+\)<-.*;/g] = 'TABLE_HEADER'
+REGEX_MAP[/\(\d+,\d+\)<-.*;/] = 'TABLE_CELL'
 
 /*
 REGEX
@@ -37,9 +43,29 @@ class Tokenizer {
 
   handleSpecialToken ({text, start}) {
     const match = _.filter(KEYWORDS, (keyword) => text.indexOf(keyword) === 1)[0]
-    console.log(match)
     if (match) {
       return {end: start + match.length, word: (OPENING_CHAR + match), type: NAME_MAP[match]}
+    }
+    else {
+      if (/^\\tb:\d+:\d+{/g.test(text)) {
+        const match = /^\\tb:\d+:\d+{/g.exec(text)
+        if (match.index === 0) {
+          const matchWord = match[0]
+          return {end: start + matchWord.length, word: matchWord, type: 'TABLE'}
+        }
+      } else if (/^\\\(header-\d+\){/g.test(text)) {
+        const match = /^\\\(header-\d+\){/g.exec(text)
+        if (match.index === 0) {
+          const matchWord = match[0]
+          return {end: start + matchWord.length, word: matchWord, type: 'TABLE_HEADER'}
+        }
+      } else if (/^\\\(\d+,\d+\){/g.test(text)) {
+        const match = /^\\\(\d+,\d+\){/g.exec(text)
+        if (match.index === 0) {
+          const matchWord = match[0]
+          return {end: start + matchWord.length, word: matchWord, type: 'TABLE_CELL'}
+        }
+      }
     }
   }
 
@@ -82,7 +108,7 @@ class Tokenizer {
           const specialToken = this.handleSpecialToken({text: text.slice(index), start: index + 1})
           if (specialToken) {
             const {end, word, type} = specialToken
-            this.pushWord({start: startIndex, end: index - 1, word: currentWord, type: 'ORDINARY'})
+            this.pushWord({start: startIndex, end: index - 1, word: currentWord, type: 'TEXT'})
             currentWord = ''
             this.pushWord({start: index - 1, end, word, type})
             index = end
@@ -94,7 +120,7 @@ class Tokenizer {
           break
         }
         case ' ': {
-          this.pushWord({start: startIndex, end: index, word: currentWord, type: 'ORDINARY'})
+          this.pushWord({start: startIndex, end: index, word: currentWord, type: 'TEXT'})
           this.pushWord({start: index, end: index + 1, word: ' ', type: 'SPACE'})
           currentWord = ''
           index += 1
@@ -102,15 +128,22 @@ class Tokenizer {
           break
         }
         case '\t': {
-          this.pushWord({start: startIndex, end: index, word: currentWord, type: 'ORDINARY'})
+          this.pushWord({start: startIndex, end: index, word: currentWord, type: 'TEXT'})
           this.pushWord({start: index, end: index + 1, word: '\t', type: 'TAB'})
           currentWord = ''
           index += 1
           startIndex = index
           break
         }
+        case '\n': {
+          this.pushWord({start: startIndex, end: index, word: currentWord, type: 'TEXT'})
+          this.pushWord({start: index, end: index + 1, word: '\n', type: 'NEWLINE'})
+          currentWord = ''
+          index += 1
+          startIndex = index
+        }
         case CLOSING_CHAR: {
-          this.pushWord({start: startIndex, end: index, word: currentWord, type: 'ORDINARY'})
+          this.pushWord({start: startIndex, end: index, word: currentWord, type: 'TEXT'})
           this.pushWord({start: index, end: index + 1, word: CLOSING_CHAR, type: 'CLOSING_CHAR'})
           currentWord = ''
           index += 1
@@ -131,7 +164,7 @@ class Tokenizer {
           break
         }
         case LIST_ITEM_START: {
-          this.pushWord({start: startIndex, end: index, word: currentWord, type: 'ORDINARY'})
+          this.pushWord({start: startIndex, end: index, word: currentWord, type: 'TEXT'})
           this.pushWord({start: index, end: index + 1, word: LIST_ITEM_START, type: 'LIST_ITEM'})
           currentWord = ''
           index += 1
@@ -144,7 +177,7 @@ class Tokenizer {
         }
       }
     }
-    this.pushWord({start: startIndex, end: index, word: currentWord, type: 'ORDINARY'})
+    this.pushWord({start: startIndex, end: index, word: currentWord, type: 'TEXT'})
     return this.tokens
   }
 }
@@ -164,17 +197,17 @@ const Rules = {
   'BOLD': {
     tag: '<strong>',
     closeTag: '</strong>',
-    inners: ['EM', 'COLOR']
+    inners: ['EM', 'COLOR', 'TEXT']
   },
   'EM': {
     tag: '<em>',
     closeTag: '</em>',
-    inners: ['BOLD', 'COLOR']
+    inners: ['BOLD', 'COLOR', 'TEXT']
   },
   'BIG': {
     tag: '<h4>',
     closeTag: '</h4>',
-    inners: []
+    inners: ['TEXT']
   },
   'ORDER_LIST': {
     tag: '<ul>',
@@ -184,24 +217,36 @@ const Rules = {
   'LIST_ITEM': {
     tag: '<li style="padding-left: 1em">',
     closeTag: '</li>',
-    inners: ['BOLD', 'EM', 'COLOR']
+    inners: ['BOLD', 'EM', 'COLOR', 'TEXT']
   },
   'INLINE_MATH': {
-    inners: []
+    inners: ['TEXT']
   },
   'NEWLINE_MATH': {
-    inners: []
+    inners: ['TEXT']
   },
   'COLOR': {
-    inners: ['BOLD', 'EM']
+    inners: ['BOLD', 'EM', 'TEXT']
   },
   'CODE': {
     tag: '<pre>',
     closeTag: '</pre>',
-    inners: []
+    inners: ['TEXT']
   },
   'TABLE': {
-    inners: ['COLOR', 'BOLD', 'EM']
+    tag: '<table>',
+    closeTag: '</table>',
+    inners: ['COLOR', 'BOLD', 'EM', 'TABLE_CELL', 'TABLE_HEADER']
+  },
+  'TABLE_HEADER': {
+    tag: '<th>',
+    closeTag: '</th>',
+    inners: ['BOLD', 'TEXT', 'EM', 'COLOR']
+  },
+  'TABLE_CELL': {
+    tag: '<td>',
+    closeTag: '</td>',
+    inners: ['BOLD', 'TEXT', 'EM', 'COLOR']
   }
 }
 
@@ -217,11 +262,55 @@ class Element {
     this.children.push(el)
   }
 
+  groupTableRow ({cells, colNumber, rowNumber}) {
+    return _.range(1, rowNumber + 1).map((row) => {
+      return cells.filter((cell) => {
+        const {word} = cell
+        const splits = word.split(',')
+        const colN = Number(/\d+/.exec(splits[0])[0])
+        const rowN = Number(/\d+/.exec(splits[1])[0])
+        return rowN === row
+      })
+    })
+  }
+
+  toHtmlTable (el) {
+    const {word} = el
+    const splits = word.split(':')
+    const colNumber = Number(splits[1])
+    const rowNumber = Number(splits[2].replace('{', ''))
+    const headers = el.children.filter((child) => child.type === 'TABLE_HEADER')
+    .map((header) => {
+      const {tag, closeTag} = Rules['TABLE_HEADER']
+      return tag + header.toHtml() + closeTag
+    }).join('')
+
+    // const cells = el.children.filter((child) => child.type === 'TABLE_CELL')
+    // .map((cell) => {
+    //   const {tag, closeTag} = Rules['TABLE_CELL']
+    //   return tag + cell.toHtml() + closeTag
+    // }).join('')
+    console.log(this.groupTableRow({cells: el.children.filter((child) => child.type === 'TABLE_CELL'), colNumber, rowNumber}))
+    const cells = this.groupTableRow({cells: el.children.filter((child) => child.type === 'TABLE_CELL'), colNumber, rowNumber})
+    .map((rowCells) => {
+      return '<tr>' + rowCells.map((cell) => {
+        const {tag, closeTag} = Rules['TABLE_CELL']
+        return tag + cell.toHtml() + closeTag
+      }).join('') + '</tr>'
+    }).join('')
+    const {tag, closeTag} = Rules['TABLE']
+    return (tag + '<tr>' + headers + '</tr>' + cells + '</table>')
+  }
+
   toHtml () {
     return this.children.map((el, i) => {
       const {type, word, parent} = el
-      if (type === 'ORDINARY') {
+      if (type === 'TEXT' || type === 'TAB' || type === 'SPACE') {
         return word
+      } else if (type === 'LIST_ITEM') {
+        const match = Rules[type]
+        const {tag, closeTag} = match
+        return tag + `${i + 1} ${el.toHtml()}` + closeTag
       } else if (type === 'INLINE_MATH') {
         const math = word.replace(/\$/g, '')
         return katex.renderToString(math)
@@ -230,6 +319,8 @@ class Element {
         return `<div class="newline-math">${katex.renderToString(math)}</div>`
       } else if (type === 'COLOR') {
         return `<span style="color:${word.replace('{', '')}">${el.toHtml()}</span>`
+      } else if (type === 'TABLE') {
+        return this.toHtmlTable(el)
       } else {
         const match = Rules[type]
         const {tag, closeTag} = match
@@ -269,7 +360,6 @@ class Tracer {
 
 }
 
-window.tracer = new Tracer()
 
 class Parser {
   constructor (tokens) {
@@ -286,6 +376,39 @@ class Parser {
     this.tokens.forEach((token, index) => {
       const {word, type} = token
       switch (type) {
+        case 'TABLE': {
+          if (this.tracer.canPush(type)) {
+            const newEl = new Element({type, word, parent: this.currentNode})
+            this.currentNode.appendChild(newEl)
+            this.currentNode = newEl
+            this.tracer.push(type)
+          } else {
+
+          }
+          break
+        }
+        case 'TABLE_HEADER': {
+          if (this.tracer.canPush(type)) {
+            const newEl = new Element({type, word, parent: this.currentNode})
+            this.currentNode.appendChild(newEl)
+            this.currentNode = newEl
+            this.tracer.push(type)
+          } else {
+
+          }
+          break
+        }
+        case 'TABLE_CELL': {
+          if (this.tracer.canPush(type)) {
+            const newEl = new Element({type, word, parent: this.currentNode})
+            this.currentNode.appendChild(newEl)
+            this.currentNode = newEl
+            this.tracer.push(type)
+          } else {
+
+          }
+          break
+        }
         case 'BOLD': {
           if (this.tracer.canPush(type)) {
             const newEl = new Element({type, word, parent: this.currentNode})
@@ -363,6 +486,15 @@ class Parser {
           }
           break
         }
+        case 'TEXT': {
+          if (this.tracer.canPush(type)) {
+            const newEl = new Element({type, word, parent: this.currentNode})
+            this.currentNode.appendChild(newEl)
+          } else {
+
+          }
+          break
+        }
         case 'CLOSING_CHAR': {
           if (tracer.top() === 'LIST_ITEM') {
             this.tracer.pop()
@@ -372,7 +504,7 @@ class Parser {
           break
         }
         default: {
-          this.currentNode.appendChild(new Element({type: 'ORDINARY', word}))
+          this.currentNode.appendChild(new Element({type, word}))
         }
       }
     })
@@ -384,6 +516,7 @@ export function translate1 (string) {
   const tokens = tokenizer.tokenize(string)
   console.log(tokens)
   const parsedTree = new Parser(tokens)
+  console.log(parsedTree.toHtml())
   return parsedTree.toHtml()
 }
 

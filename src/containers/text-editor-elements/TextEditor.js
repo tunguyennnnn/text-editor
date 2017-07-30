@@ -3,7 +3,7 @@ import CodeMirror from 'codemirror'
 import * as ED from '../../modules/EditorModule'
 import * as AutoC from '../../modules/AutoCompleter'
 
-const LINE_LIMIT = 2
+const LINE_LIMIT = 10
 export default class TextEditor extends React.Component {
 
   selectLine ({currentLine}) {
@@ -26,19 +26,28 @@ export default class TextEditor extends React.Component {
     window.editor = this.editor
     this.editor.on('change', (cm, change) => {
       const {from, to, removed, text} = change
+      let type
       if (removed[0].length > 0) { //delete action
+        type = 'DELETE'
       } else if (text[0].length > 0) { // insert text
-        const currentWord = ED.currentWord(this.editor)
-        const completeWord = AutoC.getComplete(currentWord)
-        const {line, ch} = this.editor.getCursor()
-        if (completeWord) {
-          ED.insertWord(this.editor, completeWord)
-          this.editor.setCursor({line, ch})
-        }
+        type = 'INSERT'
       } else if (text.length === 2) { // new line
-        console.log('new line')
-      } else if (removed.length === 0) { // remove line
+        type = 'NEWLINE'
+      } else { // remove line
+        type = 'DELETE_LINE'
+      }
 
+      switch (type) {
+        case 'INSERT': {
+          const {line, ch} = this.editor.getCursor()
+          const sentence = this.editor.getLine(line)
+          const completeWord = AutoC.getComplete(sentence.slice(0, ch))
+          if (completeWord) {
+            ED.insertWord(this.editor, completeWord)
+            this.editor.setCursor({line, ch})
+          }
+          break
+        }
       }
       const {line} = this.editor.getCursor()
       const {startLine, endLine} = this.selectLine({currentLine: line})
