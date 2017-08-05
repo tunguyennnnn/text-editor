@@ -7,7 +7,6 @@ import EditorMode2 from './editor-mode2/Editor'
 import EditorModeSelection from './editor-utilities/EditorModeSelection'
 
 class EditorContainer extends React.Component {
-
   render () {
     const {mode} = this.props.textEditorState
     console.log(mode)

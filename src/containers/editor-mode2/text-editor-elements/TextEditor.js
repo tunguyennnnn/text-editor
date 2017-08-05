@@ -1,16 +1,16 @@
 import React from 'react'
+import {connect} from 'react-redux'
 import CodeMirror from 'codemirror'
+import {HotKeys} from 'react-hotkeys'
 import * as ED from '../../../modules/EditorModule'
 import * as AutoC from '../../../modules/AutoCompleter'
 
-export default class TextEditor extends React.Component {
-
+class TextEditor extends React.Component {
   componentDidMount () {
     this.editorContainer = document.getElementById('text-editor-container')
     this.editorDiv = document.getElementById('text-editor')
     this.editor = CodeMirror(this.editorDiv, {
-      lineNumbers: true,
-      viewportMargin: 1000000
+      lineNumbers: true
     })
     this.wrapper = this.editor.getWrapperElement()
     _.range(1, 10).map(() => {
@@ -58,17 +58,49 @@ export default class TextEditor extends React.Component {
     })
   }
 
+  componentDidUpdate () {
+    if (this.props.commandToolState.show) {
+      $(this.editorContainer).hide()
+    } else {
+      $(this.editorContainer).show()
+      this.editor.focus()
+    }
+  }
+
+  switchModeHandler () {
+    const {showCommandTool} = this.props
+    console.log(this.editor.getInputField().blur())
+    showCommandTool()
+  }
+
   render () {
     const style = {
       position: 'absolute', width: '80%', height: '200px',
       border: '1px solid #545767', background: 'white',
       left: '2%', bottom: '5%', overflowY: 'scroll'
     }
+    const keyMap = {
+      switchMode: 'ctrl+q'
+    }
+
+    const hotKeysHanlder = {
+      switchMode: this.switchModeHandler.bind(this)
+    }
     return (
       <div id='text-editor-container' style={style}>
-        <div id='text-editor'>
-        </div>
+        <HotKeys keyMap={keyMap} handlers={hotKeysHanlder}>
+          <div id='text-editor'>
+          </div>
+        </HotKeys>
       </div>
     )
   }
 }
+
+const mapStateToProps = (state) => {
+  return {
+    commandToolState: state.commandToolState
+  }
+}
+
+export default connect(mapStateToProps)(TextEditor)
