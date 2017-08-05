@@ -39,11 +39,10 @@ const generateTable = (sentence) => {
   const colNumber = Number(splits[1])
   const rowNumber = Number(splits[2].replace('{', ''))
   if (colNumber > 0 && rowNumber > 0) {
-    // const row = _.range(0, colNumber).map((i) => '|  ').join('') + '|'
-    // return row + '\n' + _.range(0, colNumber).map((i) => '---').join('-') + '\n' + _.range(0, rowNumber).map((i) => row).join('\n')
-    const headers = _.range(1, colNumber + 1).map((i) => {
-      return `\\(header-${i}){ }`
-    }).join('\n')
+
+    // const headers = _.range(1, colNumber + 1).map((i) => {
+    //   return `\\(header-${i}){ }`
+    // }).join('\n')
 
     const body = _.range(1, rowNumber + 1).map((row) => {
       return _.range(1, colNumber + 1).map((col) => {
@@ -51,7 +50,7 @@ const generateTable = (sentence) => {
       }).join('\n')
     }).join('\n')
 
-    return '\n' + headers + '\n' + body + '\n'
+    return '\n' + body + '\n'
   }
 }
 
@@ -65,7 +64,7 @@ export function getComplete (sentence) {
   })[0]
   if (match) {
     if (/.*\\tb:\d+:\d+{$/g.test(sentence)) {
-      return '\n' + generateTable(sentence) + '\n}'
+      return generateTable(sentence) + '}'
     }
     return '}'
   }

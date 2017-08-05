@@ -1,7 +1,7 @@
 import React from 'react'
 import CodeMirror from 'codemirror'
-import * as ED from '../../modules/EditorModule'
-import * as AutoC from '../../modules/AutoCompleter'
+import * as ED from '../../../modules/EditorModule'
+import * as AutoC from '../../../modules/AutoCompleter'
 
 const LINE_LIMIT = 10
 export default class TextEditor extends React.Component {
@@ -49,12 +49,7 @@ export default class TextEditor extends React.Component {
           break
         }
       }
-      const {line} = this.editor.getCursor()
-      const {startLine, endLine} = this.selectLine({currentLine: line})
-      const textLines = _.range(startLine, endLine).map((i) => {
-        return this.editor.getLine(i)
-      })
-      this.props.preview(textLines)
+      this.props.preview([this.editor.getValue()])
     })
   }
   render () {

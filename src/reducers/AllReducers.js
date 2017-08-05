@@ -3,7 +3,7 @@ import TextEditorStore from './TextEditorStore'
 import PreviewStore from './PreviewStore'
 
 const allReducers = combineReducers({
-  textEditor: TextEditorStore,
+  textEditorState: TextEditorStore,
   previewText: PreviewStore
 })
 
