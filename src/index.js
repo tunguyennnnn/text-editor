@@ -6,6 +6,7 @@ import {Router, Route, IndexRoute, hashHistory, browserHistory} from 'react-rout
 import {syncHistoryWithStore} from 'react-router-redux'
 import {Provider} from 'react-redux'
 import EditorContainer from './containers/EditorContainer'
+import EditorTrial from './containers/EditorTrial'
 import store from './Store'
 
 const app = document.getElementById('app')
@@ -13,7 +14,8 @@ const app = document.getElementById('app')
 ReactDom.render(
   <Provider store={store}>
     <Router history={hashHistory}>
-      <Route path='/' component={EditorContainer}></Route>
+      <Route path='/' component={EditorTrial}></Route>
+      <Route path='/editor' component={EditorContainer}></Route>
     </Router>
   </Provider>
 , app)
