@@ -1,5 +1,6 @@
 import React from 'react'
 import translate from '../../../modules/converter'
+import translate2 from '../../../modules/tokenizer'
 
 import {bindActionCreators} from 'redux'
 import {connect} from 'react-redux'
@@ -9,7 +10,8 @@ class Preview extends React.Component {
   componentDidUpdate () {
     const html = translate(this.props.previewText)
     const {previewText} = this.props
-    const preview = `<div>${translate(previewText.filter((line) => line).join(' '))}</div>`
+    const preview = `<div>${translate2(previewText.filter((line) => line).join(' '))}</div>`
+    //const preview = `<div>${translate(previewText.filter((line) => line).join(' '))}</div>`
     this.previewer.innerHTML = preview
     this.previewerContainer.scrollTop = $(this.previewer).height()
   }

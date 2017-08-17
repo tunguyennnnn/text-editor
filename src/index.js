@@ -14,8 +14,8 @@ const app = document.getElementById('app')
 ReactDom.render(
   <Provider store={store}>
     <Router history={hashHistory}>
-      <Route path='/' component={EditorTrial}></Route>
-      <Route path='/editor' component={EditorContainer}></Route>
+      <Route path='/editor' component={EditorTrial}></Route>
+      <Route path='/' component={EditorContainer}></Route>
     </Router>
   </Provider>
 , app)
