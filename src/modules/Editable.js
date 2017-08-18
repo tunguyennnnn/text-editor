@@ -1,6 +1,5 @@
 const _ = require('lodash')
 import EditorEmitter from './editable-helpers/EditorEmitter'
-
 function addLines({container, numberOfLines}) {
 
 }
@@ -38,30 +37,93 @@ export default class Editable {
 
   getSelection () {
     if (this._active) {
-      const {
-        startOffset,
-        endOffset,
-        startContainer,
-        endContainer,
-        collapsed
-      } = window.getSelection().getRangeAt(0)
-      if (collapsed) { // no selection
-        console.log(startContainer)
-        let line, node
-        if (startContainer.getAttribute('line')) {
-          line = Number(startContainer.getAttribute('line'))
-          node = startContainer
+      const {startOffset, endOffset, startContainer, endContainer, collapsed} = window.getSelection().getRangeAt(0)
+      if (collapsed) {
+        if (startContainer.getAttribute) { // when there is no text
+          const line = Number(startContainer.getAttribute('line'))
+          return {
+            type: 'SINGLE_SELECTION',
+            startLine: line,
+            startPos: 0,
+            endPos: 0,
+            endLine: line,
+            node: startContainer
+          }
         } else {
-          line = this._getLineNumberOf(startContainer.parentElement)
-          node = startContainer.parentElement
+          const {lineNumber, parent} = this._getLineNumberOf(startContainer.parentElement)
+          const node = startContainer.parentElement.getAttribute('line') ? startContainer : startContainer.parentElement
+          const realCh = this._getChOf({
+            parent,
+            currentNode: node,
+            ch: startOffset
+          })
+          return {
+            type: 'SINGLE_SELECTION',
+            startLine: lineNumber,
+            startPos: realCh,
+            endPos: realCh,
+            endLine: lineNumber,
+            node: node
+          }
         }
-        return {type: 'SINGLE_SELECTION', startLine: line, startPos: startOffset, endLine: line, endPos: startOffset, node}
       } else {
-        const startLine = this._getLineNumberOf(startContainer.parentElement)
-        const endLine = this._getLineNumberOf(endContainer.parentElement)
-        return {type: 'MULTIPLE_SELECTION', startLine, startPos: startOffset, endLine, endPos: endOffset}
+        let startObjects, endObjects
+        if (startContainer.getAttribute) {
+          startObjects = {
+            startLine: Number(startContainer.getAttribute('line')),
+            startPos: 0,
+            startNode: startContainer
+          }
+        } else {
+          const start = this._getLineNumberOf(startContainer.parentElement)
+          const startNode = startContainer.parentElement.getAttribute('line') ? startContainer : startContainer.parentElement
+          const realStartCh = this._getChOf({
+            parent: start.parent,
+            currentNode: startNode,
+            ch: startOffset
+          })
+          startObjects = {
+            startPos: realStartCh,
+            startLine: start.lineNumber,
+            startNode
+          }
+        }
+        if (endContainer.getAttribute) {
+          endObjects = {
+            endLine: Number(endContainer.getAttribute('line')),
+            endPos: 0,
+            endNode: endContainer
+          }
+        } else {
+          const end = this._getLineNumberOf(endContainer.parentElement)
+          const endNode = endContainer.parentElement.getAttribute('line') ? endContainer : endContainer.parentElement
+          const realEndCh = this._getChOf({
+            parent: end.parent,
+            currentNode: endNode,
+            ch: endOffset
+          })
+          endObjects = {
+            endPos: realEndCh,
+            endLine: end.lineNumber,
+            endNode
+          }
+        }
+        return _.assign({type: 'MULTIPLE_SELECTION'}, startObjects, endObjects)
       }
     }
+  }
+
+  _getChOf ({parent, currentNode, ch}) {
+    let i = 0
+    _.forEach(parent.childNodes, (child) => {
+      if (child === currentNode) {
+        i += ch
+        return false
+      } else {
+        i += child.textContent.length
+      }
+    })
+    return i
   }
 
   getNumberOfLine () {
@@ -161,11 +223,10 @@ export default class Editable {
   }
 
   _getLineNumberOf (element) { // 0 based index
-    console.log(element)
     if (element.nodeName === '#text') {
-      return Number(element.parentElement.getAttribute('line'))
+      return {lineNumber: Number(element.parentElement.getAttribute('line')), parent: element.parentElement}
     } else if (element.getAttribute && element.getAttribute('line')) {
-      return Number(element.getAttribute('line'))
+      return {lineNumber: Number(element.getAttribute('line')), parent: element}
     } else {
       return this._getLineNumberOf(element.parentElement)
     }
@@ -177,6 +238,12 @@ export default class Editable {
   }
 
   _addKeyListener () {
+    const observer = new MutationObserver((muations) => {
+      console.log(muations)
+    })
+
+    const config = { attributes: true, childList: true, characterData: true, subtree: true }
+    observer.observe(this.editorBody, config)
     $(this.editorBody).keyup((e) => {
       console.log(e.key, e)
       if (e.key === 'Enter') {
@@ -195,11 +262,7 @@ export default class Editable {
     $(this.editorBody).on('selectstart', (e) => {
       console.log('select start')
       $(document).one('mouseup', (e) => {
-        const {type, startLine, startPos, node} = this.getSelection()
-        console.log(startLine, startPos)
-        if (type === 'SINGLE_SELECTION') {
-          console.log(node)
-        }
+        console.log(this.getSelection())
       })
     })
   }
