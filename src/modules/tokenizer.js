@@ -1,8 +1,8 @@
-const _ = require('lodash')
 const katex = require('katex')
+const _ = require('lodash')
 
-function InputStream (input) {
-  var pos = 0, line = 1, col = 0
+function InputStream(input) {
+  var pos = 0, line = 1, col = 0;
   return {
     next: next,
     peek: peek,
@@ -39,23 +39,68 @@ function TokenStream(input) {
     "code-bl": "code-block",
     "c-bl"   : "code-block",
 
+    "print": "print",
+    "p"    : "print",
+
     "img-s": "image-small",
     "i-s"  : "image-small",
+    "img-m": "image-medium",
+    "i-m"  : "image-medium",
+    "img-l": "image-large",
+    "i-l"  : "image-large",
 
     "table": "table",
     "tb"   : "table",
     "cell" : "cell",
     "c"    : "cell",
 
-    "ul"  : "unordered-list",
-    "ol"  : "ordered-list",
-    "dl"  : "definition-list",
+    "unordered-list": "unordered-list",
+    "ul"            : "unordered-list",
+    "ordered-list"  : "ordered-list",
+    "ol"            : "ordered-list",
+
     "item": "list-item",
+    "it"  : "list-item",
+
+    "definition-list": "definition-list",
+    "dl"             : "definition-list",
 
     "html": "html",
 
     "space": "space",
     "sp"   : "space",
+
+    "newline": "newline",
+    "nl"     : "newline",
+
+    "center": "center",
+    "ct"    : "center",
+
+    "note": "note",
+    "n"   : "note",
+
+    "self-note": "self-note",
+    "sn"       : "self-note",
+
+    "size": "size",
+    "s"   : "size",
+
+    "math" : "math",
+    "m"    : "math",
+    "m-seq": "math-sequence",
+
+
+    "math-block": "math-block",
+    "m-bl"      : "math-block",
+    "mbl-seq"   : "math-sequence-block",
+
+    "identifier": "identifier",
+    "id"        : "identifier",
+
+    "reference": "reference",
+    "ref"      : "reference",
+
+    "put": "replace",
 
     "title": "title"
   }
@@ -66,9 +111,10 @@ function TokenStream(input) {
     eof: eof,
     croak: input.croak
   }
-  function is_markup_char(ch) {
-    return /[a-z0-9-:]/.test(ch);
+  function is_markup_char(str) {
+    return /[a-z0-9-:]/.test(str);
   }
+
   function read_while(pred) {
     var str = "";
     while(!input.eof() && pred(input.peek())) str += input.next();
@@ -82,10 +128,17 @@ function TokenStream(input) {
     return !is_whitespace(ch);
   }
 
+  function process_whitespace(whitespace) {
+    // >= 2 newlines equal 2 newlines, >= 2 spaces equal single space
+    if ((whitespace.split("\n").length - 1)  >= 2) return "\n\n";
+    else if (whitespace.indexOf("\n") >= 0) return "\n";
+    return " ";
+  }
+
   function read_whitespace() {
     return {
       type: "whitespace",
-      value: read_while(is_whitespace)
+      value: process_whitespace(read_while(is_whitespace))
     }
   }
 
@@ -101,18 +154,59 @@ function TokenStream(input) {
     }
   }
 
+  function is_legal_markup(name, params) {
+    if ("tb table".indexOf(name) >= 0) {
+      return params.slice(0,2).every(str => /[1-9]/.test(str));
+    }
+    return markup_command.hasOwnProperty(name);
+  }
+
+  function read_math(mk_command, mc_params) {
+    var math = "", mathopen = false, mathclose = false, closing = false;
+    while(!input.eof()){
+      var ch = input.next();
+      if (!mathopen) {
+        if (is_whitespace(ch)) continue;
+        if (ch == "$") {mathopen = true; continue;}
+        math += ch;
+        break;
+      }
+      if (!mathclose) {
+        if (ch == "$") {mathclose = true; continue;}
+        math += ch;
+        continue;
+      }
+      if (ch == "}") {closing = true; break;}
+      if (is_not_whitespace(ch)) break;
+    }
+    return {
+      type: mk_command,
+      params: mc_params,
+      mathopen: mathopen,
+      mathclose: mathclose,
+      value: math,
+      closing: closing
+    }
+  }
+
   function maybe_markup() {
-    var mc_name = null, mc_params = [], mc_content = [];
-    var at = input.next(); // the @ sign
-    var mc = read_while(is_markup_char); // markup command e.g. bold:id
-    if (!mc) return at;
-    if (input.peek() != "{") return at + mc;
-    input.next();
+    var mc_name, mk_command, mc_params = [], mc_content = [];
+    var sofar = input.next();
+    var mc = read_while(is_markup_char);
+    sofar += mc;
     mc = mc.split(":");
     mc_name = mc[0], mc_params = mc.slice(1);
+    if (!mc || input.peek() != "{" || !is_legal_markup(mc_name, mc_params)) {
+      return sofar;
+    }
+    input.next();
+    mk_command = markup_command[mc_name];
+    if ("math-block".indexOf(mk_command) >= 0) {
+      return read_math(mk_command, mc_params);
+    }
     mc_content = read_until_matching("}");
     return {
-      type: markup_command[mc_name],
+      type: mk_command,
       params: mc_params,
       value: mc_content.content,
       closing: mc_content.closing
@@ -139,7 +233,7 @@ function TokenStream(input) {
     var ch = input.peek();
     if (is_whitespace(ch)) return read_whitespace();
     if (ch == "@") return maybe_markup();
-    if (ch == '`') return read_escaped();
+    if (ch == "`") return read_escaped();
     return read_text(in_markup);
   }
 
@@ -156,10 +250,18 @@ function TokenStream(input) {
   }
 }
 
+
 const HTML_TABLE = {
   'bold-text': (values) => `<strong>${generateHtmlWith(values)}</strong>`,
   'whitespace': (values) => ' ',
   'italic-text': (values) => `<em>${generateHtmlWith(values)}</strong>`,
+  'math-block': (values) => '<span>' + katex.renderToString(values) + '</span>',
+  'math-sequence': (values) => {
+    return `<span>${generateHtmlWith(values)}</span>`
+  },
+  'math': (values) => {
+    return katex.renderToString(values)
+  },
   'code-inline': (() => {}),
   'code-block': (() => {}),
   'table': (values) => {
@@ -210,26 +312,10 @@ function translate (input) {
   while (!output.eof()) {
     tokens.push(output.next())
   }
-  const html = generateHtmlWith(tokens)
   console.log(tokens)
+  const html = generateHtmlWith(tokens)
   console.log(html)
   return html
 }
 
 export default translate
-
-// if (typeof process != "undefined") (function(){
-//   var code = "";
-//   process.stdin.setEncoding("utf8");
-//   process.stdin.on("readable", function() {
-//     var chunk = process.stdin.read();
-//     if (chunk) code += chunk;
-//   });
-//   process.stdin.on("end", function(){
-//     var input = TokenStream(InputStream(code));
-//     while (!input.eof()) {
-//       console.log("-------------------------");
-//       console.log(JSON.stringify((input.next()), null, 2));
-//     }
-//   });
-// })()

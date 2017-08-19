@@ -8,7 +8,7 @@ import {connect} from 'react-redux'
 class Preview extends React.Component {
 
   componentDidUpdate () {
-    const html = translate(this.props.previewText)
+    //const html = translate(this.props.previewText)
     const {previewText} = this.props
     const preview = `<div>${translate2(previewText.filter((line) => line).join(' '))}</div>`
     //const preview = `<div>${translate(previewText.filter((line) => line).join(' '))}</div>`
