@@ -2,17 +2,14 @@ const katex = require('katex')
 const _ = require('lodash')
 
 function InputStream(input) {
-  var pos = 0, line = 1, col = 0;
+  var pos = 0;
   return {
     next: next,
     peek: peek,
     eof: eof,
-    croak: croak
   };
   function next() {
-    var ch = input.charAt(pos++);
-    if (ch == "\n") line++, col = 0; else col++;
-    return ch;
+    return input.charAt(pos++);
   }
   function peek() {
     return input.charAt(pos);
@@ -20,27 +17,55 @@ function InputStream(input) {
   function eof() {
     return peek() == "";
   }
-  function croak(msg) {
-    throw new Error(msg + " (" + line + ":" + col + ") ");
-  }
 }
 
 function TokenStream(input) {
-  const markup_command = {
-    "bold": "bold-text",
-    "b"   : "bold-text",
+  var markup_command = {
+    // text markup
+    "bold": "bold",
+    "b"   : "bold",
 
-    "italic": "italic-text",
-    "i"     : "italic-text",
+    "italic": "italic",
+    "i"     : "italic",
 
-    "code": "code-inline",
-    "c"   : "code-inline",
+    "highlight": "highlight",
+    "h"        : "highlight",
+
+    "note": "note",
+    "n"   : "note",
+
+    "self-note": "self-note",
+    "sn"       : "self-note",
+
+    "size": "size",
+    "s"   : "size",
+
+    // doc structure
+    "title": "title",
+
+    "sec"    : "sec",
+
+    "subsection": "sub",
+    "sub"       : "sub",
+
+    "subsubsection": "ssub",
+    "ssub"         : "ssub",
+
+    "subsubsubsection": "sssub",
+    "sssub"           : "sssub",
+
+    "paragraph": "p",
+    "p"        : "p",
+
+    // other elements
+    "code": "code",
+    "c"   : "code",
 
     "code-bl": "code-block",
     "c-bl"   : "code-block",
 
-    "print": "print",
-    "p"    : "print",
+    "display": "display",
+    "d"      : "display",
 
     "img-s": "image-small",
     "i-s"  : "image-small",
@@ -51,8 +76,8 @@ function TokenStream(input) {
 
     "table": "table",
     "tb"   : "table",
-    "cell" : "cell",
-    "c"    : "cell",
+    "cell" : "tb-cell",
+    "c"    : "tb-cell",
 
     "unordered-list": "unordered-list",
     "ul"            : "unordered-list",
@@ -65,8 +90,6 @@ function TokenStream(input) {
     "definition-list": "definition-list",
     "dl"             : "definition-list",
 
-    "html": "html",
-
     "space": "space",
     "sp"   : "space",
 
@@ -76,19 +99,9 @@ function TokenStream(input) {
     "center": "center",
     "ct"    : "center",
 
-    "note": "note",
-    "n"   : "note",
-
-    "self-note": "self-note",
-    "sn"       : "self-note",
-
-    "size": "size",
-    "s"   : "size",
-
     "math" : "math",
     "m"    : "math",
     "m-seq": "math-sequence",
-
 
     "math-block": "math-block",
     "m-bl"      : "math-block",
@@ -100,16 +113,14 @@ function TokenStream(input) {
     "reference": "reference",
     "ref"      : "reference",
 
-    "put": "replace",
-
-    "title": "title"
+    "eval": "eval",
+    "e"   : "e"
   }
   var current = null;
   return {
     next: next,
     peek: peek,
-    eof: eof,
-    croak: input.croak
+    eof: eof
   }
   function is_markup_char(str) {
     return /[a-z0-9-:]/.test(str);
@@ -128,19 +139,12 @@ function TokenStream(input) {
     return !is_whitespace(ch);
   }
 
-  function process_whitespace(whitespace) {
-    // >= 2 newlines equal 2 newlines, >= 2 spaces equal single space
-    if ((whitespace.split("\n").length - 1)  >= 2) return "\n\n";
-    else if (whitespace.indexOf("\n") >= 0) return "\n";
-    return " ";
-  }
-
   function read_whitespace() {
     return {
       type: "whitespace",
-      value: process_whitespace(read_while(is_whitespace))
-    }
+      value: read_while(is_whitespace)
   }
+}
 
   function read_until_matching(delimiter) {
     var content = [], closing = false;
@@ -163,21 +167,18 @@ function TokenStream(input) {
 
   function read_math(mk_command, mc_params) {
     var math = "", mathopen = false, mathclose = false, closing = false;
-    while(!input.eof()){
+    while (!input.eof()) {
       var ch = input.next();
       if (!mathopen) {
-        if (is_whitespace(ch)) continue;
-        if (ch == "$") {mathopen = true; continue;}
-        math += ch;
-        break;
+        if (ch == "$") mathopen = true;
+        else if (!is_whitespace(ch)) break;
+      } else if (!mathclose) {
+          if (ch == "$") mathclose = true;
+          else math += ch;
+      } else {
+        if (ch == "}") closing = true;
+        if (is_not_whitespace(ch)) break;
       }
-      if (!mathclose) {
-        if (ch == "$") {mathclose = true; continue;}
-        math += ch;
-        continue;
-      }
-      if (ch == "}") {closing = true; break;}
-      if (is_not_whitespace(ch)) break;
     }
     return {
       type: mk_command,
@@ -250,35 +251,125 @@ function TokenStream(input) {
   }
 }
 
+function parse(input) {
+  var possible_elements = {
+    "no-title"  : ["p", "sssub", "ssub", "sub", "sec"],
+    "title"     : ["p", "sssub", "ssub", "sub", "sec"],
+    "sec"       : ["p", "sssub", "ssub", "sub"],
+    "sub"       : ["p", "sssub", "ssub"],
+    "ssub"      : ["p", "sssub"],
+    "sssub"     : ["p"],
+  };
+  return parse_document();
+
+  function is_element(tok) {
+    return possible_elements["title"].includes(tok.type);
+  }
+
+  function into_paragraph() {
+    var text = [];
+    while (!input.eof() && !is_element(input.peek())) text.push(input.next());
+    return {
+      "container": {
+        "type": "p",
+        "params": [],
+        "value": [],
+        "closing": true
+      },
+      "content": text
+    }
+  }
+
+  function parse_element(tok_element) {
+    var content = [], children = possible_elements[tok_element.type];
+    while(!input.eof()) {
+      var tok = input.peek();
+      if (tok.type == "whitespace") {
+        if (tok_element.type == "p") content.push(input.next());
+        else input.next();
+      } else if (children && children.includes(tok.type)) {
+        content.push(parse_element(input.next()));
+      } else if (is_element(tok)) {
+        break;
+      } else {
+        if (tok_element.type == "p") content.push(input.next());
+        else content.push(into_paragraph());
+      }
+    }
+    return {
+      container: tok_element,
+      content  : content
+    }
+  }
+  function parse_document() {
+    while (!input.eof()) {
+      var tok = input.peek();
+      if (tok.type == "whitespace") continue;
+      if (tok.type == "title") return parse_element(input.next());
+      return parse_element({
+        "type"  : "no-title",
+        "params": [],
+        "value" : [],
+        "closing": true
+      });
+    }
+  }
+}
+
+// if (typeof process != "undefined") (function(){
+//   var code = "";
+//   process.stdin.setEncoding("utf8");
+//   process.stdin.on("readable", function() {
+//     var chunk = process.stdin.read();
+//     if (chunk) code += chunk;
+//   });
+//   process.stdin.on("end", function(){
+//     var ast = parse(TokenStream(InputStream(code)));
+//     console.log(JSON.stringify(ast, null, 4));
+//   });
+// })();
 
 const HTML_TABLE = {
-  'bold-text': (values) => `<strong>${generateHtmlWith(values)}</strong>`,
+  'bold': (values) => `<strong>${generateHtmlWith(values)}</strong>`,
   'whitespace': (values) => ' ',
-  'italic-text': (values) => `<em>${generateHtmlWith(values)}</strong>`,
+  'italic': (values) => `<em>${generateHtmlWith(values)}</strong>`,
   'math-block': (values) => '<span>' + katex.renderToString(values) + '</span>',
   'math-sequence': (values) => {
     return `<span>${generateHtmlWith(values)}</span>`
   },
+  'highlight': (values) => {},
+  'note': (values) => {},
+  'self-note': (values) => {},
   'math': (values) => {
     return katex.renderToString(values)
   },
-  'code-inline': (() => {}),
-  'code-block': (() => {}),
+  'math-sequence-block': (values) => {},
+  'code': () => {},
+  'code-block': () => {},
+  'display': (values) => {},
+  'image-small': (values) => {},
+  'image-medium': (values) => {},
+  'image-large': (values) => {},
+  'newline': (values) => {},
+  'center': (values) => {},
   'table': (values) => {
     const tableRows = generateTableRows(values)
     let html = ''
     _.forOwn(tableRows, (rowTokens) => {
-      console.log(rowTokens)
       html += `<tr>${generateHtmlWith(rowTokens)}</tr>`
     })
     return '<table>' + html + '</table>'
   },
-  'cell': (values) => `<td>${generateHtmlWith(values)}</td>`,
+  'table-cell': (values) => `<td>${generateHtmlWith(values)}</td>`,
   'unordered-list': (values) => `<ul>${generateHtmlWith(values.filter((value) => value.type === 'list-item'))}</ul>`,
   'ordered-list': (values) => `<ol>${generateHtmlWith(values.filter((value) => value.type === 'list-item'))}</ol>`,
-  'definition-list': (() => {}),
+  'definition-list': () => {},
   'list-item': (values) => `<li>${generateHtmlWith(values)}</li>`,
-  'title': (values) => `<h3>${generateHtmlWith(values)}</h3>`
+  'title': (values) => `<h3>${generateHtmlWith(values)}</h3>`,
+  'eval': (values) => {},
+  'reference': (values) => {},
+  'identifier': (values) => {},
+  'p': (values) => `<strong>${generateHtmlWith(values)}</strong>`
 }
 
 function generateTableRows (tokens, rowNumber, colNumber) {
@@ -301,21 +392,72 @@ function generateHtmlWith (tokens) {
     } else {
       const {type, value, closing} = token
       const func = HTML_TABLE[type]
+      console.log(type)
       return func(value)
     }
   }).join('')
 }
 
-function translate (input) {
-  const output = TokenStream(InputStream(input))
-  const tokens = []
-  while (!output.eof()) {
-    tokens.push(output.next())
+const CONTAINER_TABLE = {
+  'p': (values, content) => {
+    return `<p><strong>${generateHtmlWith(values)}</strong>${generateHtmlWith(content)}</p>`
+  },
+  'sec': (values, content) => {
+    return `<div>
+              <h2>${generateHtmlWith(values)}</h2>
+              ${content.map((subcontent) => generateContainer(subcontent)).join('<br>')}
+            </div>`
+  },
+  'sub': (value, content) => {
+    return `<div>
+              <h3>${value}</h3>
+              ${content.map((subcontent) => generateContainer(subcontent)).join('<br>')}
+            </div>`
+  },
+  'ssub': (values, content) => {
+    return `<div>
+              <h4>${generateHtmlWith(values)}</h4>
+              ${content.map((subcontent) => generateContainer(subcontent)).join('<br>')}
+            </div>`
+  },
+  'sssub': (values, content) => {
+    return `<div>
+              <h5>${generateHtmlWith(values)}</h5>
+              ${content.map((subcontent) => generateContainer(subcontent)).join('')}
+            </div>`
+  },
+  'title': (values, content) => {
+    return `<div>
+              <h1>${generateHtmlWith(values)}</h1>
+              ${content.map((subcontent) => generateContainer(subcontent)).join('')}
+            </div>`
+  },
+  'no-title': (values, content) => {
+    return `<div>
+              ${content.map((subcontent) => generateContainer(subcontent)).join('')}
+            </div>`
   }
-  console.log(tokens)
-  const html = generateHtmlWith(tokens)
-  console.log(html)
-  return html
+}
+
+function generateContainer (object) {
+  const {container, content} = object
+  const {type, value} = container
+  return CONTAINER_TABLE[type](value, content)
+}
+
+function translate (input) {
+  //const output = TokenStream(InputStream(input))
+  const parsedTree = parse(TokenStream(InputStream(input)))
+  console.log(parsedTree)
+  return generateContainer(parsedTree)
+  // const tokens = []
+  // while (!output.eof()) {
+  //   tokens.push(output.next())
+  // }
+  // console.log(tokens)
+  // const html = generateHtmlWith(tokens)
+  // console.log(html)
+  // return html
 }
 
 export default translate
