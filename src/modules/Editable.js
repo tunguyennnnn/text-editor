@@ -1,15 +1,13 @@
 const _ = require('lodash')
-import EditorEmitter from './editable-helpers/EditorEmitter'
-function addLines({container, numberOfLines}) {
-
-}
+const EventEmitter = require('eventemitter3')
+import EditorState from './editable-helpers/EditorState'
 
 export default class Editable {
   constructor (container, options = {}) {
     // internal objects
     this.options = options
     this._active = false
-    this.emitter = new EditorEmitter()
+    this.emitter = new EventEmitter()
     // DOM
     this.container = container
     this.editorBody = document.createElement('div')
@@ -29,7 +27,6 @@ export default class Editable {
     this._addKeyListener()
     this._addCaretListener()
     this._addFocusListener()
-
 
     // debugging:
     window.editable = this
@@ -113,19 +110,6 @@ export default class Editable {
     }
   }
 
-  _getChOf ({parent, currentNode, ch}) {
-    let i = 0
-    _.forEach(parent.childNodes, (child) => {
-      if (child === currentNode) {
-        i += ch
-        return false
-      } else {
-        i += child.textContent.length
-      }
-    })
-    return i
-  }
-
   getNumberOfLine () {
     return this.editorBody.childElementCount
   }
@@ -144,7 +128,7 @@ export default class Editable {
     const children = this.editorBody.children
     const len = children.length
     if (line >= len) {
-      return null
+      return this
     } else {
       const child = children[line]
       const childNodes = child.childNodes
@@ -176,9 +160,104 @@ export default class Editable {
             }
           }
         }
-        return true
       }
     }
+    return this
+  }
+
+  onTextChange (fn) {
+    this.emitter.on('text-change', changes => fn(changes))
+    return this
+  }
+
+  onSelectionChange (fn) {
+    this.emitter.on('selection-change', changes => fn(changes))
+    return this
+  }
+  /* Init methods */
+
+  _setDefaultLines () {
+    const {numberOfLines = 10} = this.options
+    $(this.editorBody).html(_.range(0, numberOfLines).map((i) => `<div line="${i}"><br></div>`).join(''))
+  }
+
+  _addKeyListener () {
+    let changeType = false
+    let oldValue = ''
+    const newLineObserver = new MutationObserver((mutations) => {
+      changeType = 'NEWLINE'
+    })
+    const newlineConfig = {childList: true}
+    newLineObserver.observe(this.editorBody, newlineConfig)
+
+    const typingObserver = new MutationObserver((mutations) => {
+      changeType = 'INSERT-TEXT'
+      const mutation = mutations.filter(mutation => mutation.type === 'characterData')[0]
+      if (mutation) {
+        oldValue = mutation.oldValue
+      }
+    })
+    const typingConfig = {attributes: true, characterData: true, subtree: true, characterDataOldValue: true}
+    typingObserver.observe(this.editorBody, typingConfig)
+    $(this.editorBody).keyup((e) => {
+      const textState = {}
+      const {key} = e
+      if (changeType) {
+        if (changeType === 'NEWLINE') {
+          textState.type = key === 'Enter' ? 'NEWLINE' : 'REMOVE-LINE'
+        } else {
+          textState.type = key === 'Backspace' ? 'REMOVE' : 'INSERT'
+          textState.oldValue = oldValue
+          textState.inserted = key
+        }
+        EditorState.updateTextState(textState)
+        this.emitter.emit('text-change', EditorState.textState)
+        changeType = null
+      } else {
+        textState.type = 'HOTKEY'
+        const selection = this.getSelection()
+        this.emitter.emit('selection-change', selection)
+      }
+    })
+  }
+
+  _addCaretListener () {
+    $(this.editorBody).on('selectstart', (e) => {
+      $(document).one('mouseup', (e) => {
+        this.emitter.emit('selection-change', this.getSelection())
+      })
+    })
+  }
+
+  _addFocusListener () {
+    $(this.editorBody).focus((e) => {
+      console.log('focus')
+      this._active = true
+    })
+    $(this.editorBody).blur((e) => {
+      console.log('blur')
+      this._active = false
+    })
+  }
+
+  /* Support methods */
+  _correctLineNumber () {
+    _.each(this.editorBody.children, (child, i) => {
+      child.setAttribute('line', i)
+    })
+  }
+
+  _getChOf ({parent, currentNode, ch}) {
+    let i = 0
+    _.forEach(parent.childNodes, (child) => {
+      if (child === currentNode) {
+        i += ch
+        return false
+      } else {
+        i += child.textContent.length
+      }
+    })
+    return i
   }
 
   _findNodeToInsert ({childNodes, ch}) {
@@ -230,51 +309,5 @@ export default class Editable {
     } else {
       return this._getLineNumberOf(element.parentElement)
     }
-  }
-
-  _setDefaultLines () {
-    const {numberOfLines = 10} = this.options
-    $(this.editorBody).html(_.range(0, numberOfLines).map((i) => `<div line="${i}"><br></div>`).join(''))
-  }
-
-  _addKeyListener () {
-    const observer = new MutationObserver((muations) => {
-      console.log(muations)
-    })
-
-    const config = { attributes: true, childList: true, characterData: true, subtree: true }
-    observer.observe(this.editorBody, config)
-    $(this.editorBody).keyup((e) => {
-      console.log(e.key, e)
-      if (e.key === 'Enter') {
-        this._correctLineNumber()
-      }
-    })
-  }
-
-  _correctLineNumber () {
-    _.each(this.editorBody.children, (child, i) => {
-      child.setAttribute('line', i)
-    })
-  }
-
-  _addCaretListener () {
-    $(this.editorBody).on('selectstart', (e) => {
-      console.log('select start')
-      $(document).one('mouseup', (e) => {
-        console.log(this.getSelection())
-      })
-    })
-  }
-
-  _addFocusListener () {
-    $(this.editorBody).focus((e) => {
-      console.log('focus')
-      this._active = true
-    })
-    $(this.editorBody).blur((e) => {
-      console.log('blur')
-      this._active = false
-    })
   }
 }
