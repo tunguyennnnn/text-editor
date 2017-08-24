@@ -15,8 +15,6 @@ export default class Editable {
     window.editorBody = this.editorBody
     this.container.appendChild(this.editorBody)
 
-    // handle options
-
     // set intial lines
     const numberOfLines = options.numberOfLines = options.numberOfLines || 10
     const containerWidth = this.container.style.width
@@ -30,6 +28,12 @@ export default class Editable {
 
     // debugging:
     window.editable = this
+
+    // handle options
+    const {notifiable = true} = options
+    if (notifiable) {
+      this._notifyOnCaretChange()
+    }
   }
 
   getSelection () {
@@ -179,6 +183,33 @@ export default class Editable {
   _setDefaultLines () {
     const {numberOfLines = 10} = this.options
     $(this.editorBody).html(_.range(0, numberOfLines).map((i) => `<div line="${i}"><br></div>`).join(''))
+  }
+
+  _notifyOnCaretChange () {
+    this.emitter.on('selection-change', (changes) => {
+      const {type, node} = changes
+      if (type === 'SINGLE_SELECTION') {
+        console.log('reach')
+        if (node.nodeName !== '#text' && node.getAttribute('uid')) {
+          const id = node.getAttribute('uid')
+          this.openingEl = this.editorBody.querySelector(`#opening-${id}`)
+          this.closingEl = this.editorBody.querySelector(`#closing-${id}`)
+          this.openingEl.style.color = 'blue'
+          this.closingEl.style.color = 'blue'
+        } else {
+          this._endNotifyOnCaretChange()
+        }
+      }
+    })
+  }
+
+  _endNotifyOnCaretChange () {
+    if (this.openingEl) {
+      this.openingEl.style.color = 'black'
+    }
+    if (this.closingEl) {
+      this.closingEl.style.color = 'black'
+    }
   }
 
   _addKeyListener () {
