@@ -2,6 +2,102 @@ const _ = require('lodash')
 const EventEmitter = require('eventemitter3')
 import EditorState from './editable-helpers/EditorState'
 
+const AUTO_COMPLETE_TABLE = {
+  "bold": "bold",
+  "b"   : "bold",
+
+  "italic": "italic",
+  "i"     : "italic",
+
+  "highlight": "highlight",
+  "h"        : "highlight",
+
+  "note": "note",
+  "n"   : "note",
+
+  "self-note": "self-note",
+  "sn"       : "self-note",
+
+  "size": "size",
+  "s"   : "size",
+
+  // doc structure
+  "title": "title",
+
+  "sec"    : "sec",
+
+  "subsection": "sub",
+  "sub"       : "sub",
+
+  "subsubsection": "ssub",
+  "ssub"         : "ssub",
+
+  "subsubsubsection": "sssub",
+  "sssub"           : "sssub",
+
+  "paragraph": "p",
+  "p"        : "p",
+
+  // other elements
+  "code": "code",
+  "c"   : "code",
+
+  "code-bl": "code-block",
+  "c-bl"   : "code-block",
+
+  "display": "display",
+  "d"      : "display",
+
+  "img-s": "image-small",
+  "i-s"  : "image-small",
+  "img-m": "image-medium",
+  "i-m"  : "image-medium",
+  "img-l": "image-large",
+  "i-l"  : "image-large",
+
+  "table": "table",
+  "tb"   : "table",
+  "cell" : "tb-cell",
+  "c"    : "tb-cell",
+
+  "unordered-list": "unordered-list",
+  "ul"            : "unordered-list",
+  "ordered-list"  : "ordered-list",
+  "ol"            : "ordered-list",
+
+  "item": "list-item",
+  "it"  : "list-item",
+
+  "definition-list": "definition-list",
+  "dl"             : "definition-list",
+
+  "space": "space",
+  "sp"   : "space",
+
+  "newline": "newline",
+  "nl"     : "newline",
+
+  "center": "center",
+  "ct"    : "center",
+
+  "math" : "math",
+  "m"    : "math",
+  "m-seq": "math-sequence",
+
+  "math-block": "math-block",
+  "m-bl"      : "math-block",
+  "mbl-seq"   : "math-sequence-block",
+
+  "identifier": "identifier",
+  "id"        : "identifier",
+
+  "reference": "reference",
+  "ref"      : "reference",
+
+  "eval": "eval",
+  "e"   : "e"
+}
+
 export default class Editable {
   constructor (container, options = {}) {
     // internal objects
@@ -33,6 +129,10 @@ export default class Editable {
     const {notifiable = true} = options
     if (notifiable) {
       this._notifyOnCaretChange()
+    }
+    const {autoCompletable = true, acTable = AUTO_COMPLETE_TABLE} = options
+    if (autoCompletable) {
+      this._applyAutoCompleteWith(acTable)
     }
   }
 
@@ -114,6 +214,24 @@ export default class Editable {
     }
   }
 
+  getCurrentWord () {
+    const selection = this.getSelection()
+    const {type} = selection
+    if (type === 'SINGLE_SELECTION') {
+      const {startPos, startLine, node} = selection
+      const nodeName = node.nodeName
+      if (nodeName === 'DIV' && node.getAttribute('line')) {
+        return {word: '', nodeType: node.nodeName, node}
+      } else if (nodeName !== '#text') {
+        return {word: node.textContent, nodeType: nodeName, node}
+      } else {
+        const lineEl = this.editorBody.children[startLine]
+        const text = lineEl.textContent
+        return {word: text.slice(0, startPos), nodeType: nodeName, node}
+      }
+    }
+  }
+
   getNumberOfLine () {
     return this.editorBody.childElementCount
   }
@@ -180,6 +298,26 @@ export default class Editable {
   }
   /* Init methods */
 
+  _applyAutoCompleteWith (acTable) {
+    this.onTextChange((changes) => {
+      const {type} = changes
+      if (type === 'INSERT') {
+        const {inserted, oldValue} = changes
+        if (inserted === '{') {
+          const {word, nodeType, node} = this.getCurrentWord()
+          if (nodeType === '#text') {
+            this._anyKeyMatch(word, acTable)
+          }
+        }
+      }
+    })
+  }
+
+  _anyKeyMatch (word, acTable) {
+    const keys = _.keys(acTable)
+    console.log(word, keys)
+  }
+
   _setDefaultLines () {
     const {numberOfLines = 10} = this.options
     $(this.editorBody).html(_.range(0, numberOfLines).map((i) => `<div line="${i}"><br></div>`).join(''))
@@ -189,7 +327,6 @@ export default class Editable {
     this.emitter.on('selection-change', (changes) => {
       const {type, node} = changes
       if (type === 'SINGLE_SELECTION') {
-        console.log('reach')
         if (node.nodeName !== '#text' && node.getAttribute('uid')) {
           const id = node.getAttribute('uid')
           this.openingEl = this.editorBody.querySelector(`#opening-${id}`)
@@ -233,6 +370,7 @@ export default class Editable {
     $(this.editorBody).keyup((e) => {
       const textState = {}
       const {key} = e
+      console.log(key)
       if (changeType) {
         if (changeType === 'NEWLINE') {
           textState.type = key === 'Enter' ? 'NEWLINE' : 'REMOVE-LINE'
@@ -241,8 +379,7 @@ export default class Editable {
           textState.oldValue = oldValue
           textState.inserted = key
         }
-        EditorState.updateTextState(textState)
-        this.emitter.emit('text-change', EditorState.textState)
+        this.emitter.emit('text-change', textState)
         changeType = null
       } else {
         textState.type = 'HOTKEY'
