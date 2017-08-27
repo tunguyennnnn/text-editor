@@ -221,13 +221,13 @@ export default class Editable {
       const {startPos, startLine, node} = selection
       const nodeName = node.nodeName
       if (nodeName === 'DIV' && node.getAttribute('line')) {
-        return {word: '', nodeType: node.nodeName, node}
+        return {word: '', nodeType: node.nodeName, node, selection}
       } else if (nodeName !== '#text') {
-        return {word: node.textContent, nodeType: nodeName, node}
+        return {word: node.textContent, nodeType: nodeName, node, selection}
       } else {
         const lineEl = this.editorBody.children[startLine]
         const text = lineEl.textContent
-        return {word: text.slice(0, startPos), nodeType: nodeName, node}
+        return {word: text.slice(0, startPos), nodeType: nodeName, node, selection}
       }
     }
   }
@@ -244,6 +244,16 @@ export default class Editable {
       }
       return text + '\n'
     }).join('')
+  }
+
+  setCaretAt ({line, ch}) {
+    const range = document.createRange()
+    const selection = document.getSelection()
+    console.log(this.editorBody.childNodes)
+    range.setStart(this.editorBody.childNodes[line], ch)
+    range.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(range)
   }
 
   insertHtmlAt ({line, ch, html, type = 'text'}) {
@@ -304,18 +314,24 @@ export default class Editable {
       if (type === 'INSERT') {
         const {inserted, oldValue} = changes
         if (inserted === '{') {
-          const {word, nodeType, node} = this.getCurrentWord()
+          const {word, nodeType, node, selection} = this.getCurrentWord()
           if (nodeType === '#text') {
-            this._anyKeyMatch(word, acTable)
+            const match = this._anyKeyMatch(word, acTable, selection)
+            const {startLine, startPos} = selection
+            this.insertHtmlAt({line: startLine, ch: startPos, html: '}'})
           }
         }
       }
     })
   }
 
-  _anyKeyMatch (word, acTable) {
+  _anyKeyMatch (word, acTable, selection) {
     const keys = _.keys(acTable)
     console.log(word, keys)
+    return keys.filter((key) => {
+      const fullKey = `@${key}{`
+      return fullKey === word.slice(word.length - fullKey.length)
+    })[0]
   }
 
   _setDefaultLines () {
