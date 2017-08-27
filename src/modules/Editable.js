@@ -247,10 +247,21 @@ export default class Editable {
   }
 
   setCaretAt ({line, ch}) {
+    const childDiv = this.editorBody.childNodes[line]
+    const {reNode, type, chAtNode} = this._findNodeAt({childNodes: childDiv.childNodes, ch})
+    console.log(line, chAtNode, reNode, type)
     const range = document.createRange()
     const selection = document.getSelection()
-    console.log(this.editorBody.childNodes)
-    range.setStart(this.editorBody.childNodes[line], ch)
+    if (type === '#text') {
+      range.setStart(reNode, chAtNode)
+    } else {
+      if (type === "BR") {
+        const parentNode = reNode.parentNode
+        range.setStart(parentNode, 0)
+      } else {
+        range.setStart(reNode.childNodes[0], chAtNode)
+      }
+    }
     range.collapse(true)
     selection.removeAllRanges()
     selection.addRange(range)
@@ -319,6 +330,7 @@ export default class Editable {
             const match = this._anyKeyMatch(word, acTable, selection)
             const {startLine, startPos} = selection
             this.insertHtmlAt({line: startLine, ch: startPos, html: '}'})
+            this.setCaretAt({line: startLine, ch: startPos})
           }
         }
       }
@@ -390,6 +402,7 @@ export default class Editable {
       if (changeType) {
         if (changeType === 'NEWLINE') {
           textState.type = key === 'Enter' ? 'NEWLINE' : 'REMOVE-LINE'
+          this._correctLineNumber()
         } else {
           textState.type = key === 'Backspace' ? 'REMOVE' : 'INSERT'
           textState.oldValue = oldValue
@@ -471,18 +484,19 @@ export default class Editable {
   }
 
   _findNodeAt ({childNodes, ch}) {
-    let i = 0, reNode = null, type
+    let i = 0, reNode = null, type, chAtNode = 0
     _.forEach(childNodes, (child, index) => {
       const text = child.textContent
       type = child.nodeName
       if (i + text.length >= ch) {
         reNode = child
+        chAtNode = ch - i
         return false
       } else {
         i += text.length
       }
     })
-    return {reNode, type}
+    return {reNode, type, chAtNode}
   }
 
   _getLineNumberOf (element) { // 0 based index
