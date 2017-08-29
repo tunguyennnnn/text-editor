@@ -232,6 +232,7 @@ function TokenStream(input) {
   function read_next(in_markup) {
     if (input.eof()) return null;
     var ch = input.peek();
+    if (!ch) return null
     if (is_whitespace(ch)) return read_whitespace();
     if (ch == "@") return maybe_markup();
     if (ch == "`") return read_escaped();
@@ -242,8 +243,8 @@ function TokenStream(input) {
     return current || (current = read_next());
   }
   function next() {
-    var tok = current;
-    current = null;
+    var tok = current
+    current = null
     return tok || read_next(false);
   }
   function eof() {
@@ -251,22 +252,23 @@ function TokenStream(input) {
   }
 }
 
-function parse(input) {
-  var possible_elements = {
-    "no-title"  : ["p", "sssub", "ssub", "sub", "sec"],
-    "title"     : ["p", "sssub", "ssub", "sub", "sec"],
-    "sec"       : ["p", "sssub", "ssub", "sub"],
-    "sub"       : ["p", "sssub", "ssub"],
-    "ssub"      : ["p", "sssub"],
-    "sssub"     : ["p"],
-  };
-  return parse_document();
+const POSSILE_ELEMENTS = {
+  "no-title"  : ["p", "sssub", "ssub", "sub", "sec"],
+  "title"     : ["p", "sssub", "ssub", "sub", "sec"],
+  "sec"       : ["p", "sssub", "ssub", "sub"],
+  "sub"       : ["p", "sssub", "ssub"],
+  "ssub"      : ["p", "sssub"],
+  "sssub"     : ["p"],
+}
 
-  function is_element(tok) {
-    return possible_elements["title"].includes(tok.type);
+function parse (input) {
+  return parse_document()
+
+  function is_element (tok) {
+    return POSSILE_ELEMENTS['title'].includes(tok.type)
   }
 
-  function into_paragraph() {
+  function into_paragraph () {
     var text = [];
     while (!input.eof() && !is_element(input.peek())) text.push(input.next());
     return {
@@ -281,7 +283,7 @@ function parse(input) {
   }
 
   function parse_element(tok_element) {
-    var content = [], children = possible_elements[tok_element.type];
+    var content = [], children = POSSILE_ELEMENTS[tok_element.type];
     while(!input.eof()) {
       var tok = input.peek();
       if (tok.type == "whitespace") {
@@ -304,7 +306,9 @@ function parse(input) {
   function parse_document() {
     while (!input.eof()) {
       var tok = input.peek();
-      if (tok.type == "whitespace") continue;
+      if (tok.type == "whitespace") {
+        continue
+      }
       if (tok.type == "title") return parse_element(input.next());
       return parse_element({
         "type"  : "no-title",
@@ -316,18 +320,6 @@ function parse(input) {
   }
 }
 
-// if (typeof process != "undefined") (function(){
-//   var code = "";
-//   process.stdin.setEncoding("utf8");
-//   process.stdin.on("readable", function() {
-//     var chunk = process.stdin.read();
-//     if (chunk) code += chunk;
-//   });
-//   process.stdin.on("end", function(){
-//     var ast = parse(TokenStream(InputStream(code)));
-//     console.log(JSON.stringify(ast, null, 4));
-//   });
-// })();
 
 const HTML_TABLE = {
   'bold': (values) => `<strong>${generateHtmlWith(values)}</strong>`,
@@ -446,18 +438,12 @@ function generateContainer (object) {
 }
 
 function translate (input) {
-  //const output = TokenStream(InputStream(input))
-  const parsedTree = parse(TokenStream(InputStream(input)))
-  console.log(parsedTree)
-  return generateContainer(parsedTree)
-  // const tokens = []
-  // while (!output.eof()) {
-  //   tokens.push(output.next())
-  // }
-  // console.log(tokens)
-  // const html = generateHtmlWith(tokens)
-  // console.log(html)
-  // return html
+  if (/^\n+$/.test(input)) {
+    return '<div></div>'
+  } else {
+    const parsedTree = parse(TokenStream(InputStream(input)))
+    return generateContainer(parsedTree)
+  }
 }
 
 export default translate
