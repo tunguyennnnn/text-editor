@@ -307,7 +307,7 @@ function parse (input) {
     while (!input.eof()) {
       var tok = input.peek();
       if (tok.type == "whitespace") {
-        continue
+        input.next()
       }
       if (tok.type == "title") return parse_element(input.next());
       return parse_element({

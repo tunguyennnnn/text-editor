@@ -1,6 +1,7 @@
 const _ = require('lodash')
 const EventEmitter = require('eventemitter3')
 import EditorState from './editable-helpers/EditorState'
+import * as IdManager from './editable-helpers/IdManager'
 
 const AUTO_COMPLETE_TABLE = {
   "bold": "bold",
@@ -293,11 +294,17 @@ export default class Editable {
               if (tailText.length > 0) {
                 const tailNode = document.createTextNode(tailText)
                 child.insertBefore(tailNode, nextNode)
+              } else {
+                const tailNode = document.createTextNode(' ')
+                child.insertBefore(tailNode, nextNode)
               }
             } else {
               child.appendChild(midNode)
               if (tailText.length > 0) {
                 const tailNode = document.createTextNode(tailText)
+                child.appendChild(tailNode)
+              } else {
+                const tailNode = document.createTextNode(' ')
                 child.appendChild(tailNode)
               }
             }
@@ -306,6 +313,44 @@ export default class Editable {
       }
     }
     return this
+  }
+
+  insertMarkDownNodes ({line, ch, mdType}) {
+    const childDiv = this.editorBody.childNodes[line]
+    const {reNode, reIndex, nodeType, nextNode} = this._findNodeToInsert({childNodes: childDiv.childNodes, ch})
+    const {headId, tailId} = IdManager.generateIdFor({type: mdType})
+    const startNode = $(`<span id="${headId}" value="@${mdType}{" pairId="${tailId}">@${mdType}{</span>`)[0]
+    const midNode = document.createTextNode('  ')
+    const endNode = $(`<span id="${tailId}" pairId="${headId}">}</span>`)[0]
+    if (nodeType === "#text") {
+      const textOfNode = reNode.textContent
+      reNode.textContent = textOfNode.slice(0, reIndex - mdType.length - 2)
+      const tailText = textOfNode.slice(reIndex)
+      if (nextNode) {
+        childDiv.insertBefore(startNode, nextNode)
+        childDiv.insertBefore(midNode, nextNode)
+        childDiv.insertBefore(endNode, nextNode)
+        if (tailText.length > 0) {
+          const tailNode = document.createTextNode(tailText)
+          childDiv.insertBefore(tailNode, nextNode)
+        } else {
+          const tailNode = document.createTextNode(' ')
+          childDiv.insertBefore(tailNode, nextNode)
+        }
+      } else {
+        childDiv.appendChild(startNode, nextNode)
+        childDiv.appendChild(midNode, nextNode)
+        childDiv.appendChild(endNode, nextNode)
+        if (tailText.length > 0) {
+          const tailNode = document.createTextNode(tailText)
+          childDiv.appendChild(tailNode)
+        } else {
+          const tailNode = document.createTextNode(' ')
+          childDiv.appendChild(tailNode)
+        }
+      }
+      this.setCaretAt({line, ch: ch + 1})
+    }
   }
 
   onTextChange (fn) {
@@ -317,6 +362,17 @@ export default class Editable {
     this.emitter.on('selection-change', changes => fn(changes))
     return this
   }
+
+  replaceTextAt ({line, from, to, withHtml}) {
+    const div = this.editorBody.childNodes[line]
+    const {reNode, type, chAtNode} = this._findNodeAt({childNodes: div.childNodes, ch: from})
+    if (type === '#text') {
+      const text = reNode.textContent
+      reNode.textContent = text.slice(0, chAtNode) + text.slice(to - from + chAtNode)
+      this.insertHtmlAt({line, ch: from, html: withHtml, type: 'HTML'})
+    }
+  }
+
   /* Init methods */
 
   _applyAutoCompleteWith (acTable) {
@@ -328,9 +384,11 @@ export default class Editable {
           const {word, nodeType, node, selection} = this.getCurrentWord()
           if (nodeType === '#text') {
             const match = this._anyKeyMatch(word, acTable, selection)
-            const {startLine, startPos} = selection
-            this.insertHtmlAt({line: startLine, ch: startPos, html: '}'})
-            this.setCaretAt({line: startLine, ch: startPos})
+            if (match) {
+              const {startLine, startPos} = selection
+              const {headId, tailId} = IdManager.generateIdFor({type: match})
+              this.insertMarkDownNodes({line: startLine, ch: startPos, mdType: match})
+            }
           }
         }
       }
@@ -355,10 +413,12 @@ export default class Editable {
     this.emitter.on('selection-change', (changes) => {
       const {type, node} = changes
       if (type === 'SINGLE_SELECTION') {
-        if (node.nodeName !== '#text' && node.getAttribute('uid')) {
-          const id = node.getAttribute('uid')
-          this.openingEl = this.editorBody.querySelector(`#opening-${id}`)
-          this.closingEl = this.editorBody.querySelector(`#closing-${id}`)
+        if (node.nodeName !== '#text' && node.getAttribute('pairId')) {
+          const id = node.getAttribute('id')
+          const pairId = node.getAttribute('pairId')
+          this.openingEl = this.editorBody.querySelector(`#${id}`)
+          this.closingEl = this.editorBody.querySelector(`#${pairId}`)
+          console.log(this.openingEl, this.closingEl)
           this.openingEl.style.color = 'blue'
           this.closingEl.style.color = 'blue'
         } else {
