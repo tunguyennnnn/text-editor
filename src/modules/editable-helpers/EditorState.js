@@ -1,15 +1,16 @@
 const EditorState = {
-  textState: {
-    type: null,
-    oldValue: '',
-    inserted: null
+  state: {
+    source: 'USER',
+    domHistory: []
   },
-  selectionState: {},
-  updateTextState ({type, oldValue, inserted}) {
-    this.state = {type, oldValue, inserted}
+  updateSource (source = 'API') {
+    this.state.source = source
   },
-  updateSelectionState (state) {
-    this.selectionState = state
+  resetSource () {
+    this.state.source = 'USER'
+  },
+  updateDom (dom) {
+
   }
 }
 
