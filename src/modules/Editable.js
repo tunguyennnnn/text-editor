@@ -99,7 +99,7 @@ const AUTO_COMPLETE_TABLE = {
   "e"   : "e"
 }
 
-export default class Editable {
+class Editable {
   constructor (container, options = {}) {
     // internal objects
     this.options = options
@@ -131,17 +131,13 @@ export default class Editable {
     if (notifiable) {
       this._notifyOnCaretChange()
     }
-    const {autoCompletable = true, acTable = AUTO_COMPLETE_TABLE} = options
-    if (autoCompletable) {
-      this._applyAutoCompleteWith(acTable)
-    }
   }
 
   getSelection () {
     if (this._active) {
       const {startOffset, endOffset, startContainer, endContainer, collapsed} = window.getSelection().getRangeAt(0)
       if (collapsed) {
-        if (startContainer.getAttribute) { // when there is no text
+        if (startContainer.nodeName === 'DIV') { // when there is no text
           const line = Number(startContainer.getAttribute('line'))
           return {
             type: 'SINGLE_SELECTION',
@@ -152,10 +148,10 @@ export default class Editable {
             node: startContainer
           }
         } else {
-          const {lineNumber, parent} = this._getLineNumberOf(startContainer.parentElement)
+          const {lineNumber, parentDiv} = this._getLineNumberOf(startContainer.parentElement)
           const node = startContainer.parentElement.getAttribute('line') ? startContainer : startContainer.parentElement
           const realCh = this._getChOf({
-            parent,
+            parent: parentDiv,
             currentNode: node,
             ch: startOffset
           })
@@ -170,43 +166,43 @@ export default class Editable {
         }
       } else {
         let startObjects, endObjects
-        if (startContainer.getAttribute) {
+        if (startContainer.nodeName === 'DIV') {
           startObjects = {
             startLine: Number(startContainer.getAttribute('line')),
             startPos: 0,
             startNode: startContainer
           }
         } else {
-          const start = this._getLineNumberOf(startContainer.parentElement)
+          const {lineNumber, parentDiv} = this._getLineNumberOf(startContainer.parentElement)
           const startNode = startContainer.parentElement.getAttribute('line') ? startContainer : startContainer.parentElement
           const realStartCh = this._getChOf({
-            parent: start.parent,
+            parent: parentDiv,
             currentNode: startNode,
             ch: startOffset
           })
           startObjects = {
             startPos: realStartCh,
-            startLine: start.lineNumber,
+            startLine: lineNumber,
             startNode
           }
         }
-        if (endContainer.getAttribute) {
+        if (startContainer.nodeName === 'DIV') {
           endObjects = {
             endLine: Number(endContainer.getAttribute('line')),
             endPos: 0,
             endNode: endContainer
           }
         } else {
-          const end = this._getLineNumberOf(endContainer.parentElement)
+          const {lineNumber, parentDiv} = this._getLineNumberOf(endContainer.parentElement)
           const endNode = endContainer.parentElement.getAttribute('line') ? endContainer : endContainer.parentElement
           const realEndCh = this._getChOf({
-            parent: end.parent,
+            parent: parentDiv,
             currentNode: endNode,
             ch: endOffset
           })
           endObjects = {
             endPos: realEndCh,
-            endLine: end.lineNumber,
+            endLine: lineNumber,
             endNode
           }
         }
@@ -224,7 +220,19 @@ export default class Editable {
       if (nodeName === 'DIV' && node.getAttribute('line')) {
         return {word: '', nodeType: node.nodeName, node, selection}
       } else if (nodeName !== '#text') {
-        return {word: node.textContent, nodeType: nodeName, node, selection}
+        const {reNode, type, chAtNode} = this._findNodeAt({childNodes: this.editorBody.childNodes[startLine].childNodes, ch: startPos})
+        return {word: reNode.textContent.slice(0, chAtNode), nodeType: type, node: reNode, selection}
+        // if (reNode.getAttribute('type') === 'CONTAINER') {
+        //   const childNodes = reNode.childNodes
+        //   if (childNodes.length > 1) {
+        //     return {word: reNode.textContent.slice(childNodes[0].textContent.length, chAtNode), nodeType: type, node: reNode, selection}
+        //   } else {
+        //     return {word: childNodes[0].textContent.slice(0, chAtNode), nodeType: type, node: reNode, selection}
+        //   }
+        // } else {
+        //   console.log('Reach')
+        //   return {word: reNode.textContent.slice(0, chAtNode), nodeType: type, node: reNode, selection}
+        // }
       } else {
         const lineEl = this.editorBody.children[startLine]
         const text = lineEl.textContent
@@ -254,13 +262,11 @@ export default class Editable {
     const selection = document.getSelection()
     if (type === '#text') {
       range.setStart(reNode, chAtNode)
+    } else if (type === "BR") {
+      const parentNode = reNode.parentNode
+      range.setStart(parentNode, 0)
     } else {
-      if (type === "BR") {
-        const parentNode = reNode.parentNode
-        range.setStart(parentNode, 0)
-      } else {
-        range.setStart(reNode.childNodes[0], chAtNode)
-      }
+      range.setStart(reNode.childNodes[0], chAtNode)
     }
     range.collapse(true)
     selection.removeAllRanges()
@@ -314,20 +320,45 @@ export default class Editable {
     return this
   }
 
+  insertMarkDownNodesWithBreak ({line, ch, mdType, container}) {
+    const childDiv = this.editorBody.childNodes[line]
+    const {reNode, nodeType, chAtNode} = this._findNodeAt({childNodes: childDiv.childNodes, ch})
+    const {headId, tailId} = IdManager.generateIdFor({type: mdType})
+    const startNode = $(`<span class="${headId}" type="CONTAINER"><span type="HEAD" id="${headId}" value="@${mdType}{" pairId="${tailId}" >@${mdType}{</span> </span>`)[0]
+    //const midNode = document.createTextNode(' ')
+    const endNode = $(`<span type="TAIL" id="${tailId}" pairId="${headId}" value="}" >}</span>`)[0]
+    const text = reNode.textContent
+    const nextNode = container.nextSibling
+    if (chAtNode < text.length) {
+      reNode.textContent = text.slice(0, chAtNode - mdType.length - 2)
+      const className = container.getAttribute('class')
+      const newNode = $(`<span class="${className}" type="CONTAINER">${text.slice(chAtNode)}</span>`)[0]
+      childDiv.insertBefore(newNode, nextNode)
+      childDiv.insertBefore(startNode, newNode)
+      childDiv.insertBefore(endNode, newNode)
+    } else {
+      reNode.textContent = text.slice(0, chAtNode -  mdType.length - 2)
+      childDiv.insertBefore(startNode, nextNode)
+      childDiv.insertBefore(endNode, nextNode)
+    }
+    this.setCaretAt({line, ch: ch + 1})
+    EditorState.updateSource('API')
+  }
+
   insertMarkDownNodes ({line, ch, mdType}) {
     const childDiv = this.editorBody.childNodes[line]
     const {reNode, reIndex, nodeType, nextNode} = this._findNodeToInsert({childNodes: childDiv.childNodes, ch})
     const {headId, tailId} = IdManager.generateIdFor({type: mdType})
-    const startNode = $(`<span id="${headId}" value="@${mdType}{" pairId="${tailId}">@${mdType}{</span>`)[0]
-    const midNode = document.createTextNode('  ')
-    const endNode = $(`<span id="${tailId}" pairId="${headId}" value="}">}</span>`)[0]
+    const startNode = $(`<span class="${headId}" type="CONTAINER"><span type="HEAD" id="${headId}" value="@${mdType}{" pairId="${tailId}" >@${mdType}{</span> </span>`)[0]
+    //const midNode = document.createTextNode(' ')
+    const endNode = $(`<span type="TAIL" id="${tailId}" pairId="${headId}" value="}" >}</span>`)[0]
     if (nodeType === "#text") {
       const textOfNode = reNode.textContent
       reNode.textContent = textOfNode.slice(0, reIndex - mdType.length - 2)
       const tailText = textOfNode.slice(reIndex)
       if (nextNode) {
         childDiv.insertBefore(startNode, nextNode)
-        childDiv.insertBefore(midNode, nextNode)
+        //childDiv.insertBefore(midNode, nextNode)
         childDiv.insertBefore(endNode, nextNode)
         if (tailText.length > 0) {
           const tailNode = document.createTextNode(tailText)
@@ -338,7 +369,7 @@ export default class Editable {
         }
       } else {
         childDiv.appendChild(startNode, nextNode)
-        childDiv.appendChild(midNode, nextNode)
+        //childDiv.appendChild(midNode, nextNode)
         childDiv.appendChild(endNode, nextNode)
         if (tailText.length > 0) {
           const tailNode = document.createTextNode(tailText)
@@ -349,6 +380,7 @@ export default class Editable {
         }
       }
       this.setCaretAt({line, ch: ch + 1})
+      EditorState.updateSource('API')
     }
   }
 
@@ -358,7 +390,10 @@ export default class Editable {
   }
 
   onSelectionChange (fn) {
-    this.emitter.on('selection-change', changes => fn(changes))
+    this.emitter.on('selection-change', changes => {
+      //console.log(changes)
+      fn(changes)
+    })
     return this
   }
 
@@ -372,71 +407,8 @@ export default class Editable {
     }
   }
 
-  /* Init methods */
-
-  _applyAutoCompleteWith (acTable) {
-    this.onTextChange((changes) => {
-      if (EditorState.state.source === 'API') {
-        console.log('Reach')
-        EditorState.resetSource()
-        return this
-      }
-      console.log('Reach 2')
-      const {type} = changes
-      const selection = this.getSelection()
-      if (selection.type === 'SINGLE_SELECTION') {
-        if (selection.node.nodeName === '#text') {
-          if (type === 'INSERT') {
-            const {inserted, oldValue} = changes
-            if (inserted === '{') {
-              const {word, nodeType, node, selection} = this.getCurrentWord()
-              if (nodeType === '#text') {
-                const match = this._anyKeyMatch(word, acTable, selection)
-                console.log(match)
-                if (match) {
-                  const {startLine, startPos} = selection
-                  const {headId, tailId} = IdManager.generateIdFor({type: match})
-                  this.insertMarkDownNodes({line: startLine, ch: startPos, mdType: match})
-                  EditorState.updateSource('API')
-                }
-              }
-            }
-          }
-        } else {
-          const {startLine, startPos, node} = selection
-          const nextNode = node.nextSibling
-          const defaultText = node.getAttribute('value')
-          const extraText = node.textContent.replace(defaultText, '')
-          if (extraText.length > 0) {
-            node.textContent = defaultText
-            if (nextNode) {
-              if (nextNode.nodeName === '#text') {
-                console.log(extraText)
-                nextNode.textContent = extraText + nextNode.textContent
-                this.setCaretAt({line: startLine, ch: startPos})
-              } else {
-                console.log(extraText)
-                console.log(this.editorBody.childNodes[startLine].childNodes)
-                this._createTextNodeWith({text: extraText, at: startLine, after: node})
-                this.setCaretAt({line: startLine, ch: startPos})
-              }
-            } else {
-              console.log(extraText)
-              this._createTextNodeWith({text: extraText, at: startLine, after: node})
-              this.setCaretAt({line: startLine, ch: startPos})
-            }
-            EditorState.updateSource('API')
-          }
-        }
-      } else {
-
-      }
-    })
-  }
-
-  _createTextNodeWith ({text, at, after}) {
+  createTextNodeWith ({text, at, after}) {
     const childDiv = this.editorBody.childNodes[at]
-    console.log(after)
     if (after.nextSibling) {
       childDiv.insertBefore(document.createTextNode(text), after.nextSibling)
     } else {
@@ -445,14 +417,20 @@ export default class Editable {
     if (!after.getAttribute('id')) {
       childDiv.removeChild(after)
     }
+    EditorState.updateSource('API')
+    return this
   }
 
-  _anyKeyMatch (word, acTable, selection) {
-    const keys = _.keys(acTable)
-    return keys.filter((key) => {
-      const fullKey = `@${key}{`
-      return fullKey === word.slice(word.length - fullKey.length)
-    })[0]
+  fixNodeAtLine ({line}) {
+    const childDiv = this.editorBody.childNodes[line]
+    childDiv.childNodes.forEach((child) => {
+      if (child.nodeName !== '#text') {
+        if (!child.getAttribute('id')) {
+          childDiv.removeChild(child)
+        }
+      }
+    })
+    EditorState.updateSource('API')
   }
 
   _setDefaultLines () {
@@ -461,21 +439,21 @@ export default class Editable {
   }
 
   _notifyOnCaretChange () {
-    this.emitter.on('selection-change', (changes) => {
-      const {type, node} = changes
-      if (type === 'SINGLE_SELECTION') {
-        if (node.nodeName !== '#text' && node.getAttribute('pairId')) {
-          const id = node.getAttribute('id')
-          const pairId = node.getAttribute('pairId')
-          this.openingEl = this.editorBody.querySelector(`#${id}`)
-          this.closingEl = this.editorBody.querySelector(`#${pairId}`)
-          this.openingEl.style.color = 'blue'
-          this.closingEl.style.color = 'blue'
-        } else {
-          this._endNotifyOnCaretChange()
-        }
-      }
-    })
+    // this.emitter.on('selection-change', (changes) => {
+    //   const {type, node} = changes
+    //   if (type === 'SINGLE_SELECTION') {
+    //     if (node.nodeName !== '#text' && node.getAttribute('pairId')) {
+    //       const id = node.getAttribute('id')
+    //       const pairId = node.getAttribute('pairId')
+    //       this.openingEl = this.editorBody.querySelector(`#${id}`)
+    //       this.closingEl = this.editorBody.querySelector(`#${pairId}`)
+    //       this.openingEl.style.color = 'blue'
+    //       this.closingEl.style.color = 'blue'
+    //     } else {
+    //       this._endNotifyOnCaretChange()
+    //     }
+    //   }
+    // })
   }
 
   _endNotifyOnCaretChange () {
@@ -554,11 +532,40 @@ export default class Editable {
   _getChOf ({parent, currentNode, ch}) {
     let i = 0
     _.forEach(parent.childNodes, (child) => {
-      if (child === currentNode) {
-        i += ch
-        return false
+      if (child.nodeName === '#text' || child.getAttribute('type') === 'TAIL') {
+        if (currentNode === child) {
+          i += ch
+          return false
+        } else {
+          i += child.textContent.length
+        }
+      } else if (child.getAttribute('type') === 'CONTAINER') {
+        if (currentNode.nodeName === '#text') {
+          i += child.textContent.length
+        } else if (currentNode.getAttribute('type') === 'CONTAINER') {
+          if (currentNode === child) {
+            const childNodes = currentNode.childNodes
+            if (childNodes.length > 1) {
+              i += childNodes[0].textContent.length + ch
+            } else {
+              i += ch
+            }
+            return false
+          } else {
+            i += child.textContent.length
+          }
+        } else if (currentNode.getAttribute('type') === 'HEAD') {
+          if (currentNode.parentElement === child) {
+            i += ch
+            return false
+          } else {
+            i += child.textContent.length
+          }
+        } else {
+          i += child.textContent.length
+        }
       } else {
-        i += child.textContent.length
+        //errors
       }
     })
     return i
@@ -596,9 +603,30 @@ export default class Editable {
       const text = child.textContent
       type = child.nodeName
       if (i + text.length >= ch) {
-        reNode = child
-        chAtNode = ch - i
-        return false
+        if (type === '#text' || child.getAttribute('type') === 'TAIL') {
+          reNode = child
+          chAtNode = ch - i
+          return false
+        } else {
+          const children = child.childNodes
+          if (children.length > 1) {
+            if (i + children[0].textContent.length >= ch) {
+              reNode = children[0]
+              chAtNode = ch - i
+              return false
+            } else {
+              reNode = children[1]
+              type = "#text"
+              chAtNode = ch - i - children[0].textContent.length
+              return false
+            }
+          } else {
+            reNode = child.childNodes[0]
+            type = "#text"
+            chAtNode = ch - i
+            return false
+          }
+        }
       } else {
         i += text.length
       }
@@ -607,12 +635,142 @@ export default class Editable {
   }
 
   _getLineNumberOf (element) { // 0 based index
-    if (element.nodeName === '#text') {
-      return {lineNumber: Number(element.parentElement.getAttribute('line')), parent: element.parentElement}
-    } else if (element.getAttribute && element.getAttribute('line')) {
-      return {lineNumber: Number(element.getAttribute('line')), parent: element}
-    } else {
+    if (element.nodeName !== 'DIV') {
       return this._getLineNumberOf(element.parentElement)
+    } else {
+      if (element.getAttribute('line')) return {lineNumber: Number(element.getAttribute('line')), parentDiv: element}
+      else return {lineNumber: 0, parentDiv: this.editorBody.childNodes[0]}
     }
   }
+}
+
+function anyKeyMatch (word, acTable) {
+  const keys = _.keys(acTable)
+  return keys.filter((key) => {
+    const fullKey = `@${key}{`
+    return fullKey === word.slice(word.length - fullKey.length)
+  })[0]
+}
+
+function fixNode (node) {
+  const childNode = node.childNodes[0]
+}
+
+export default function makeEditor (container, options) {
+  const editor = new Editable(container, options)
+  editor.onSelectionChange((changes) => {
+
+  })
+
+  editor.onTextChange((changes) => {
+    if (EditorState.state.source === 'API') {
+      EditorState.resetSource()
+      return this
+    }
+    const {type} = changes
+    const selection = editor.getSelection()
+    if (selection.type === 'SINGLE_SELECTION') {
+      if (selection.node.nodeName === '#text') {
+        if (type === 'INSERT') {
+          const {inserted, oldValue} = changes
+          if (inserted === '{') {
+            const {word, nodeType, node, selection} = editor.getCurrentWord()
+            if (nodeType === '#text') {
+              const match = anyKeyMatch(word, AUTO_COMPLETE_TABLE, selection)
+              if (match) {
+                const {startLine, startPos} = selection
+                editor.insertMarkDownNodes({line: startLine, ch: startPos, mdType: match})
+              }
+            }
+          }
+        }
+      } else {
+        const {node} = selection
+        switch (type) {
+          case 'INSERT': {
+            const {inserted, oldValue} = changes
+            const {node} = selection
+            if (node.getAttribute('type') === 'CONTAINER') {
+              if (inserted === '{') {
+                const {word, selection} = editor.getCurrentWord()
+                const match = anyKeyMatch(word, AUTO_COMPLETE_TABLE, selection)
+                if (match) {
+                  const {startLine, startPos} = selection
+                  editor.insertMarkDownNodesWithBreak({line: startLine, ch: startPos, mdType: match, container: node})
+                }
+              }
+            }
+          }
+        }
+        // switch (type) {
+        //   case 'INSERT': {
+        //     const {startLine, startPos, node} = selection
+        //     const nextNode = node.nextSibling
+        //     const defaultText = node.getAttribute('value')
+        //     const currentText = node.textContent
+        //     const {inserted, oldValue} = changes
+        //     if (inserted.length === 1) {
+        //       if (currentText.indexOf(defaultText) !== -1) { // insert at the end of node
+        //         node.textContent = defaultText
+        //         const extraText = currentText.replace(defaultText, '')
+        //         if (nextNode) {
+        //           if (nextNode.nodeName === '#text') {
+        //             nextNode.textContent = extraText + nextNode.textContent
+        //             editor.setCaretAt({line: startLine, ch: startPos})
+        //           } else {
+        //             editor.createTextNodeWith({text: extraText, at: startLine, after: node})
+        //             editor.setCaretAt({line: startLine, ch: startPos})
+        //           }
+        //         } else {
+        //           editor.createTextNodeWith({text: extraText, at: startLine, after: node})
+        //           editor.setCaretAt({line: startLine, ch: startPos})
+        //         }
+        //       } else { // insert in between node
+        //         node.textContent = defaultText
+        //         editor.setCaretAt({line: startLine, ch: startPos - 1})
+        //       }
+        //     }
+        //     if (currentText.indexOf(defaultText) !== -1) { // insert at the end of node
+        //       node.textContent = defaultText
+        //       const extraText = currentText.replace(defaultText, '')
+        //       if (nextNode) {
+        //         if (nextNode.nodeName === '#text') {
+        //           nextNode.textContent = extraText + nextNode.textContent
+        //           editor.setCaretAt({line: startLine, ch: startPos})
+        //         } else {
+        //           editor.createTextNodeWith({text: extraText, at: startLine, after: node})
+        //           editor.setCaretAt({line: startLine, ch: startPos})
+        //         }
+        //       } else {
+        //         editor.createTextNodeWith({text: extraText, at: startLine, after: node})
+        //         editor.setCaretAt({line: startLine, ch: startPos})
+        //       }
+        //     } else { // insert in between node
+        //       node.textContent = defaultText
+        //       editor.setCaretAt({line: startLine, ch: startPos - 1})
+        //     }
+        //     break
+        //   }
+        //   case 'REMOVE': {
+        //     const {startLine, startPos, node} = selection
+        //     node.textContent = node.getAttribute('value')
+        //     editor.setCaretAt({line: startLine, ch: startPos})
+        //     break
+        //   }
+        //   case 'NEWLINE': {
+        //
+        //     break
+        //   }
+        //   case 'REMOVE-LINE': {
+        //     break
+        //   }
+        //   default: {
+        //
+        //   }
+        // }
+      }
+    } else {
+
+    }
+  })
 }

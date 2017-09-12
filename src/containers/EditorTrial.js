@@ -1,10 +1,10 @@
 import React from 'react'
-import Editable from '../modules/Editable'
+import makeEditor from '../modules/Editable'
 
 export default class EditorTrial extends React.Component {
   componentDidMount () {
     this.editorDiv = document.getElementById('text-editor-trial')
-    const editable = new Editable(this.editorDiv)
+    const editable = makeEditor(this.editorDiv, {})
   }
 
   render () {
