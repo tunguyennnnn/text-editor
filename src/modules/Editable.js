@@ -685,11 +685,10 @@ export default function makeEditor (container, options) {
           }
         }
       } else {
-        const {node} = selection
+        const {node, startLine, startPos} = selection
         switch (type) {
           case 'INSERT': {
             const {inserted, oldValue} = changes
-            const {node} = selection
             if (node.getAttribute('type') === 'CONTAINER') {
               if (inserted === '{') {
                 const {word, selection} = editor.getCurrentWord()
@@ -699,6 +698,39 @@ export default function makeEditor (container, options) {
                   editor.insertMarkDownNodesWithBreak({line: startLine, ch: startPos, mdType: match, container: node})
                 }
               }
+            } else if (node.getAttribute('type') === 'HEAD') {
+              const defaultText = node.getAttribute('value')
+              const nextNode = node.nextSibling
+              const currentText = node.textContent
+              node.textContent = defaultText
+              if (currentText.indexOf(defaultText) === 0) {
+                const extraText = currentText.replace(defaultText, '')
+                if (nextNode) {
+                  nextNode.textContent = extraText + nextNode.textContent
+                  editor.setCaretAt({line: startLine, ch: startPos})
+                } else {
+                  const newNode = document.createTextNode(extraText)
+                  node.parentNode.appendChild(newNode)
+                  editor.setCaretAt({line: startLine, ch: startPos})
+                }
+              } else {
+                editor.setCaretAt({line: startLine, ch: startPos})
+              }
+            } else if (node.getAttribute('type') === 'TAIL') {
+              const defaultText = node.getAttribute('value')
+              const nextNode = node.nextSibling
+              const extraText = node.textContent.replace(defaultText, '')
+              node.textContent = defaultText
+              if (nextNode) {
+                if (nextNode.nodeName === '#text') {
+                  nextNode.textContent = extraText + nextNode.textContent
+                } else {
+                  node.parentNode.insertBefore(document.createTextNode(extraText), nextNode)
+                }
+              } else {
+                node.parentNode.appendChild(document.createTextNode(extraText))
+              }
+              editor.setCaretAt({line: startLine, ch: startPos})
             }
           }
         }
