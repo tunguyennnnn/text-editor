@@ -125,12 +125,6 @@ class Editable {
 
     // debugging:
     window.editable = this
-
-    // handle options
-    const {notifiable = true} = options
-    if (notifiable) {
-      this._notifyOnCaretChange()
-    }
   }
 
   getSelection () {
@@ -389,6 +383,11 @@ class Editable {
     return this
   }
 
+  beforeTextChange (fn) {
+    this.emitter.on('before-text-change', changes => fn(changes))
+    return this
+  }
+
   onSelectionChange (fn) {
     this.emitter.on('selection-change', changes => {
       //console.log(changes)
@@ -438,24 +437,6 @@ class Editable {
     $(this.editorBody).html(_.range(0, numberOfLines).map((i) => `<div line="${i}"><br></div>`).join(''))
   }
 
-  _notifyOnCaretChange () {
-    // this.emitter.on('selection-change', (changes) => {
-    //   const {type, node} = changes
-    //   if (type === 'SINGLE_SELECTION') {
-    //     if (node.nodeName !== '#text' && node.getAttribute('pairId')) {
-    //       const id = node.getAttribute('id')
-    //       const pairId = node.getAttribute('pairId')
-    //       this.openingEl = this.editorBody.querySelector(`#${id}`)
-    //       this.closingEl = this.editorBody.querySelector(`#${pairId}`)
-    //       this.openingEl.style.color = 'blue'
-    //       this.closingEl.style.color = 'blue'
-    //     } else {
-    //       this._endNotifyOnCaretChange()
-    //     }
-    //   }
-    // })
-  }
-
   _endNotifyOnCaretChange () {
     if (this.openingEl) {
       this.openingEl.style.color = 'black'
@@ -483,6 +464,16 @@ class Editable {
     })
     const typingConfig = {attributes: true, characterData: true, subtree: true, characterDataOldValue: true}
     typingObserver.observe(this.editorBody, typingConfig)
+
+    $(this.editorBody).keydown(e => {
+      const changes = {}
+      changes.key = e.key
+      const selection = this.getSelection()
+      changes.node = selection.node
+      changes.event = e
+      this.emitter.emit('before-text-change', changes)
+    })
+
     $(this.editorBody).keyup((e) => {
       const textState = {}
       const {key} = e
@@ -656,10 +647,59 @@ function fixNode (node) {
   const childNode = node.childNodes[0]
 }
 
+
+class HighlightManager {
+  constructor () {
+    this.headNode = null
+    this.tailNode = null
+    this.defaultColor = 'black'
+    this.textColor = '#008CBA'
+  }
+
+  set (head, tail) {
+    if (head === this.headNode && tail === this.tailNode) return this
+    this.headNode = head
+    this.tailNode = tail
+    this.headNode.style.color = this.textColor
+    this.tailNode.style.color = this.textColor
+    return this
+  }
+
+  reset () {
+    if (this.headNode) {
+      this.headNode.style.color = this.defaultColor
+      this.headNode = null
+    }
+    if (this.tailNode) {
+      this.tailNode.style.color = this.defaultColor
+      this.tailNode = null
+    }
+    return this
+  }
+}
+
 export default function makeEditor (container, options) {
+  const highlightManager = new HighlightManager()
   const editor = new Editable(container, options)
   editor.onSelectionChange((changes) => {
+    const {node} = changes
+    if (node.nodeName === 'SPAN') {
+      if (node.getAttribute('type') === 'HEAD' || node.getAttribute('type') === 'TAIL') {
+        const pairNode = editor.editorBody.querySelector(`#${node.getAttribute('pairId')}`)
+        highlightManager.set(node, pairNode)
+      } else {
+        highlightManager.reset()
+      }
+    }
+  })
 
+  editor.beforeTextChange(changes => {
+    const {key, node, event} = changes
+    if (key === 'Backspace') {
+      if (node.nodeName === 'SPAN' && node.getAttribute('type') === 'TAIL') {
+        event.preventDefault()
+      }
+    }
   })
 
   editor.onTextChange((changes) => {
@@ -671,6 +711,7 @@ export default function makeEditor (container, options) {
     const selection = editor.getSelection()
     if (selection.type === 'SINGLE_SELECTION') {
       if (selection.node.nodeName === '#text') {
+        highlightManager.reset()
         if (type === 'INSERT') {
           const {inserted, oldValue} = changes
           if (inserted === '{') {
@@ -690,6 +731,7 @@ export default function makeEditor (container, options) {
           case 'INSERT': {
             const {inserted, oldValue} = changes
             if (node.getAttribute('type') === 'CONTAINER') {
+              highlightManager.reset()
               if (inserted === '{') {
                 const {word, selection} = editor.getCurrentWord()
                 const match = anyKeyMatch(word, AUTO_COMPLETE_TABLE, selection)
@@ -733,73 +775,14 @@ export default function makeEditor (container, options) {
               editor.setCaretAt({line: startLine, ch: startPos})
             }
           }
+          case 'REMOVE': {
+            if (node.getAttribute('type') === 'HEAD') {
+              const defaultText = node.getAttribute('value')
+              node.textContent = defaultText
+              editor.setCaretAt({line: startLine, ch: startPos})
+            }
+          }
         }
-        // switch (type) {
-        //   case 'INSERT': {
-        //     const {startLine, startPos, node} = selection
-        //     const nextNode = node.nextSibling
-        //     const defaultText = node.getAttribute('value')
-        //     const currentText = node.textContent
-        //     const {inserted, oldValue} = changes
-        //     if (inserted.length === 1) {
-        //       if (currentText.indexOf(defaultText) !== -1) { // insert at the end of node
-        //         node.textContent = defaultText
-        //         const extraText = currentText.replace(defaultText, '')
-        //         if (nextNode) {
-        //           if (nextNode.nodeName === '#text') {
-        //             nextNode.textContent = extraText + nextNode.textContent
-        //             editor.setCaretAt({line: startLine, ch: startPos})
-        //           } else {
-        //             editor.createTextNodeWith({text: extraText, at: startLine, after: node})
-        //             editor.setCaretAt({line: startLine, ch: startPos})
-        //           }
-        //         } else {
-        //           editor.createTextNodeWith({text: extraText, at: startLine, after: node})
-        //           editor.setCaretAt({line: startLine, ch: startPos})
-        //         }
-        //       } else { // insert in between node
-        //         node.textContent = defaultText
-        //         editor.setCaretAt({line: startLine, ch: startPos - 1})
-        //       }
-        //     }
-        //     if (currentText.indexOf(defaultText) !== -1) { // insert at the end of node
-        //       node.textContent = defaultText
-        //       const extraText = currentText.replace(defaultText, '')
-        //       if (nextNode) {
-        //         if (nextNode.nodeName === '#text') {
-        //           nextNode.textContent = extraText + nextNode.textContent
-        //           editor.setCaretAt({line: startLine, ch: startPos})
-        //         } else {
-        //           editor.createTextNodeWith({text: extraText, at: startLine, after: node})
-        //           editor.setCaretAt({line: startLine, ch: startPos})
-        //         }
-        //       } else {
-        //         editor.createTextNodeWith({text: extraText, at: startLine, after: node})
-        //         editor.setCaretAt({line: startLine, ch: startPos})
-        //       }
-        //     } else { // insert in between node
-        //       node.textContent = defaultText
-        //       editor.setCaretAt({line: startLine, ch: startPos - 1})
-        //     }
-        //     break
-        //   }
-        //   case 'REMOVE': {
-        //     const {startLine, startPos, node} = selection
-        //     node.textContent = node.getAttribute('value')
-        //     editor.setCaretAt({line: startLine, ch: startPos})
-        //     break
-        //   }
-        //   case 'NEWLINE': {
-        //
-        //     break
-        //   }
-        //   case 'REMOVE-LINE': {
-        //     break
-        //   }
-        //   default: {
-        //
-        //   }
-        // }
       }
     } else {
 
