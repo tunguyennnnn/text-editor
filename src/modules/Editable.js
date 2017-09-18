@@ -256,23 +256,17 @@ class Editable {
       } else if (nodeName !== '#text') {
         const {reNode, type, chAtNode} = this._findNodeAt({childNodes: this.editorBody.childNodes[startLine].childNodes, ch: startPos})
         return {word: reNode.textContent.slice(0, chAtNode), nodeType: type, node: reNode, selection}
-        // if (reNode.getAttribute('type') === 'CONTAINER') {
-        //   const childNodes = reNode.childNodes
-        //   if (childNodes.length > 1) {
-        //     return {word: reNode.textContent.slice(childNodes[0].textContent.length, chAtNode), nodeType: type, node: reNode, selection}
-        //   } else {
-        //     return {word: childNodes[0].textContent.slice(0, chAtNode), nodeType: type, node: reNode, selection}
-        //   }
-        // } else {
-        //   console.log('Reach')
-        //   return {word: reNode.textContent.slice(0, chAtNode), nodeType: type, node: reNode, selection}
-        // }
       } else {
         const lineEl = this.editorBody.children[startLine]
         const text = lineEl.textContent
         return {word: text.slice(0, startPos), nodeType: nodeName, node, selection}
       }
     }
+  }
+
+  addContainerBefore ({node, withText}) {
+    const className = node.getAttribute('class')
+    node.parentNode.insertBefore($(`<span class="${className}" type="CONTAINER">${withText}</span>`)[0], node)
   }
 
   removeHighlight (node) {
@@ -507,24 +501,24 @@ class Editable {
   }
 
   _addKeyListener () {
-    let changeType = false
-    let oldValue = ''
-    const newLineObserver = new MutationObserver((mutations) => {
-      changeType = 'NEWLINE'
-    })
-    const newlineConfig = {childList: true}
-    newLineObserver.observe(this.editorBody, newlineConfig)
-
-    const typingObserver = new MutationObserver((mutations) => {
-      changeType = 'INSERT-TEXT'
-      const mutation = mutations.filter(mutation => mutation.type === 'characterData')[0]
-      console.log(mutations)
-      if (mutation) {
-        oldValue = mutation.oldValue
-      }
-    })
-    const typingConfig = {attributes: true, characterData: true, subtree: true, characterDataOldValue: true}
-    typingObserver.observe(this.editorBody, typingConfig)
+    // let changeType = false
+    // let oldValue = ''
+    // const newLineObserver = new MutationObserver((mutations) => {
+    //   changeType = 'NEWLINE'
+    // })
+    // const newlineConfig = {childList: true}
+    // newLineObserver.observe(this.editorBody, newlineConfig)
+    //
+    // const typingObserver = new MutationObserver((mutations) => {
+    //   changeType = 'INSERT-TEXT'
+    //   const mutation = mutations.filter(mutation => mutation.type === 'characterData')[0]
+    //   console.log(mutations)
+    //   if (mutation) {
+    //     oldValue = mutation.oldValue
+    //   }
+    // })
+    // const typingConfig = {attributes: true, characterData: true, subtree: true, characterDataOldValue: true}
+    // typingObserver.observe(this.editorBody, typingConfig)
 
     this.editorBody.addEventListener('paste', (e) => {
       const selection = this.getSelection()
@@ -534,35 +528,73 @@ class Editable {
         this.emitter.emit('before-paste-text', {text, node: selection.node, complete: () => { document.execCommand('insertHTML', false, text) }})
       }
     })
-
+    const enterState = {}
+    const backspaceState = {}
     $(this.editorBody).keydown(e => {
+      const {key} = e
+      const selection = this.getSelection()
+      if (key === 'Enter') {
+        enterState.startLine = selection.startLine
+      }
+      if (key === 'Backspace') {
+        backspaceState.startLine = selection.startLine
+      }
       const changes = {}
       changes.key = e.key
-      const selection = this.getSelection()
       changes.node = selection.node
       changes.event = e
       this.emitter.emit('before-text-change', changes)
     })
 
-    $(this.editorBody).keyup((e) => {
-      const textState = {}
+    $(this.editorBody).keyup(e => {
       const {key} = e
-      if (changeType) {
-        if (changeType === 'NEWLINE') {
-          textState.type = key === 'Enter' ? 'NEWLINE' : 'REMOVE-LINE'
-          this._correctLineNumber()
-        } else {
-          textState.type = key === 'Backspace' ? 'REMOVE' : 'INSERT'
-          textState.oldValue = oldValue
-          textState.inserted = key
-        }
-        this.emitter.emit('text-change', textState)
-        changeType = null
-      } else {
-        textState.type = 'HOTKEY'
+      if (key === 'Enter') {
+        this._correctLineNumber()
         const selection = this.getSelection()
-        this.emitter.emit('selection-change', selection)
+        if (selection.startLine === enterState.startLine) {
+          this.emitter.emit('text-change', 'HOTKEY')
+        } else {
+          this.emitter.emit('text-change', {type: 'NEWLINE'})
+        }
+      } else if (key === 'Backspace') {
+        this._correctLineNumber()
+        const selection = this.getSelection()
+        if (selection.startLine === backspaceState.startLine) {
+          this.emitter.emit('text-change', {type: 'REMOVE'})
+        } else {
+          this.emitter.emit('text-change', {type: 'REMOVE-LINE'})
+        }
+      } else {
+        if (key.length > 1) {
+          this.emitter.emit('text-change', {type: 'HOTKEY'})
+        } else {
+          this.emitter.emit('text-change', {type: 'INSERT', inserted: key})
+        }
       }
+    //   const textState = {}
+    //   const {key} = e
+    //   if (changeType) {
+    //     if (changeType === 'NEWLINE') {
+    //       textState.type = key === 'Enter' ? 'NEWLINE' : 'REMOVE-LINE'
+    //       this._correctLineNumber()
+    //     } else {
+    //       if (key === 'Backspace') {
+    //         textState.type = 'REMOVE'
+    //       } else if (key.length > 1) {
+    //         textState.type = 'HOTKEY'
+    //       } else {
+    //         textState.type = 'INSERT'
+    //         textState.oldValue = oldValue
+    //         textState.inserted = key
+    //       }
+    //     }
+    //     this.emitter.emit('text-change', textState)
+    //     changeType = null
+    //   } else {
+    //     textState.type = 'HOTKEY'
+    //     const selection = this.getSelection()
+    //     this.emitter.emit('selection-change', selection)
+    //   }
     })
   }
 
@@ -772,6 +804,7 @@ export default function makeEditor (container, options) {
         editor.removeHighlight(node)
       }
     } else if (key === 'Enter') {
+      console.log(node)
       if (node.nodeName === 'SPAN') {
         const type = node.getAttribute('type')
         if (type === 'HEAD') {
@@ -781,9 +814,26 @@ export default function makeEditor (container, options) {
             event.preventDefault()
           }
         } else if (type === 'TAIL') {
-
+          console.log(editor.getNodeSelection())
         } else if (type === 'CONTAINER') {
 
+        }
+      }
+    } else {
+      if (node.nodeName === 'SPAN' && node.getAttribute('type') === 'TAIL') {
+        const nodeSelection = editor.getNodeSelection()
+        if (nodeSelection.ch === 0) {
+          const previousNode = node.previousSibling
+          console.log(previousNode)
+          if (previousNode) {
+            if (previousNode.getAttribute('class') === node.getAttribute('class') && previousNode.getAttribute('type') === 'CONTAINER') {
+              previousNode.textContent += key
+            } else {
+              editor.addContainerBefore({node, withText: key})
+            }
+          } else {
+            editor.addContainerBefore({node, withText: key})
+          }
         }
       }
     }
@@ -797,19 +847,31 @@ export default function makeEditor (container, options) {
       }
       case 'SPAN': {
         if (node.getAttribute('type') === 'HEAD') {
-          const nextNode = node.nextSibling
-          if (nextNode) {
-            nextNode.textContent = text + nextNode.textContent
+          const nodeSelection = editor.getNodeSelection()
+          const textLength = node.getAttribute('value').length
+          if (nodeSelection.ch < textLength) {
+            // TODO show popups
           } else {
-            node.parentNode.appendChild(document.createTextNode(text))
+            const nextNode = node.nextSibling
+            if (nextNode) {
+              nextNode.textContent = text + nextNode.textContent
+            } else {
+              node.parentNode.appendChild(document.createTextNode(text))
+            }
           }
         }
         else if (node.getAttribute('type' === 'TAIL')) {
           const nextNode = node.nextSibling
-          if (nextNode) {
-            node.parentNode.insertBefore(document.createTextNode(text), nextNode)
+          const nodeSelection = editor.getNodeSelection()
+          const textLength = node.getAttribute('value').length
+          if (nodeSelection.ch < textLength) {
+            // Do nothing
           } else {
-            node.parentNode.appendChild(document.createTextNode(text))
+            if (nextNode) {
+              node.parentNode.insertBefore(document.createTextNode(text), nextNode)
+            } else {
+              node.parentNode.appendChild(document.createTextNode(text))
+            }
           }
         } else {
           complete()
@@ -848,7 +910,8 @@ export default function makeEditor (container, options) {
         const {node, startLine, startPos} = selection
         switch (type) {
           case 'INSERT': {
-            const {inserted, oldValue} = changes
+            console.log(node)
+            const {inserted} = changes
             if (node.getAttribute('type') === 'CONTAINER') {
               highlightManager.reset()
               if (inserted === '{') {
@@ -902,7 +965,6 @@ export default function makeEditor (container, options) {
             }
           }
           case 'NEWLINE': {
-            console.log(node)
             if (node.nodeName === 'SPAN') {
               const type = node.getAttribute('type')
               if (type === 'HEAD') {
