@@ -167,9 +167,20 @@ class Editable {
     })
   }
 
+  getSelectionText (selection = this.getSelection()) {
+    const {startNode, endNode, startLine, endLine, startPos, endPos} = selection
+    if (startLine === endLine) {
+      const parentNode = this.editorBody.childNodes[startLine]
+      return parentNode.textContent.slice(startPos, endPos)
+    } else {
+
+    }
+  }
+
   getSelection () {
     if (this._active) {
-      const {startOffset, endOffset, startContainer, endContainer, collapsed} = window.getSelection().getRangeAt(0)
+      const range = window.getSelection().getRangeAt(0)
+      const {startOffset, endOffset, startContainer, endContainer, collapsed} = range
       if (collapsed) {
         if (startContainer.nodeName === 'DIV') { // when there is no text
           const line = Number(startContainer.getAttribute('line'))
@@ -276,9 +287,10 @@ class Editable {
     const containerClassName = id.split('-')[1]
     node.parentNode.removeChild(node)
     pairNode.parentNode.removeChild(pairNode)
-    _.forEach(this.editorBody.getElementsByClassName(containerClassName), (container) => {
-      const textContent = container.textContent
-      container.parentNode.replaceChild(document.createTextNode(textContent), container)
+    const containers = $(`.${containerClassName}`)
+    containers.each((i, el) => {
+      const textContent = $(el).text()
+      $(el).replaceWith(document.createTextNode(textContent))
     })
     return this
   }
@@ -486,6 +498,10 @@ class Editable {
     EditorState.updateSource('API')
   }
 
+  _getNodeList ({from, to, childNodes}) {
+
+  }
+
   _setDefaultLines () {
     const {numberOfLines = 10} = this.options
     $(this.editorBody).html(_.range(0, numberOfLines).map((i) => `<div line="${i}"><br></div>`).join(''))
@@ -501,25 +517,6 @@ class Editable {
   }
 
   _addKeyListener () {
-    // let changeType = false
-    // let oldValue = ''
-    // const newLineObserver = new MutationObserver((mutations) => {
-    //   changeType = 'NEWLINE'
-    // })
-    // const newlineConfig = {childList: true}
-    // newLineObserver.observe(this.editorBody, newlineConfig)
-    //
-    // const typingObserver = new MutationObserver((mutations) => {
-    //   changeType = 'INSERT-TEXT'
-    //   const mutation = mutations.filter(mutation => mutation.type === 'characterData')[0]
-    //   console.log(mutations)
-    //   if (mutation) {
-    //     oldValue = mutation.oldValue
-    //   }
-    // })
-    // const typingConfig = {attributes: true, characterData: true, subtree: true, characterDataOldValue: true}
-    // typingObserver.observe(this.editorBody, typingConfig)
-
     this.editorBody.addEventListener('paste', (e) => {
       const selection = this.getSelection()
       e.preventDefault()
@@ -528,73 +525,50 @@ class Editable {
         this.emitter.emit('before-paste-text', {text, node: selection.node, complete: () => { document.execCommand('insertHTML', false, text) }})
       }
     })
-    const enterState = {}
-    const backspaceState = {}
-    $(this.editorBody).keydown(e => {
-      const {key} = e
+
+    this.editorBody.addEventListener('copy', e => {
       const selection = this.getSelection()
-      if (key === 'Enter') {
-        enterState.startLine = selection.startLine
+      if (selection.type === 'MULTIPLE_SELECTION') {
+        const copyText = this.getSelectionText(selection)
       }
-      if (key === 'Backspace') {
-        backspaceState.startLine = selection.startLine
+    })
+
+    $(this.editorBody).keydown(e => {
+      const {key, ctrlKey} = e
+      if (!ctrlKey) {
+        const selection = this.getSelection()
+        if (selection.type === 'SINGLE_SELECTION') {
+          const changes = {}
+          changes.key = key
+          changes.node = selection.node
+          changes.event = e
+          this.emitter.emit('before-text-change', changes)
+        }
       }
-      const changes = {}
-      changes.key = e.key
-      changes.node = selection.node
-      changes.event = e
-      this.emitter.emit('before-text-change', changes)
     })
 
     $(this.editorBody).keyup(e => {
-      const {key} = e
-      if (key === 'Enter') {
-        this._correctLineNumber()
-        const selection = this.getSelection()
-        if (selection.startLine === enterState.startLine) {
-          this.emitter.emit('text-change', 'HOTKEY')
-        } else {
+      const {key, ctrlKey} = e
+      if (!ctrlKey) {
+        if (key === 'Enter') {
+          this._correctLineNumber()
+          const selection = this.getSelection()
           this.emitter.emit('text-change', {type: 'NEWLINE'})
-        }
-      } else if (key === 'Backspace') {
-        this._correctLineNumber()
-        const selection = this.getSelection()
-        if (selection.startLine === backspaceState.startLine) {
-          this.emitter.emit('text-change', {type: 'REMOVE'})
+        } else if (key === 'Backspace') {
+          this._correctLineNumber()
+          const selection = this.getSelection()
+          this.emitter
+          .emit('text-change', {type: 'REMOVE-LINE'})
         } else {
-          this.emitter.emit('text-change', {type: 'REMOVE-LINE'})
+          if (key.length > 1) {
+            this.emitter.emit('selection-change', this.getSelection())
+          } else {
+            this.emitter.emit('text-change', {type: 'INSERT', inserted: key})
+          }
         }
       } else {
-        if (key.length > 1) {
-          this.emitter.emit('text-change', {type: 'HOTKEY'})
-        } else {
-          this.emitter.emit('text-change', {type: 'INSERT', inserted: key})
-        }
+        this.emitter.emit('selection-change', this.getSelection())
       }
-    //   const textState = {}
-    //   const {key} = e
-    //   if (changeType) {
-    //     if (changeType === 'NEWLINE') {
-    //       textState.type = key === 'Enter' ? 'NEWLINE' : 'REMOVE-LINE'
-    //       this._correctLineNumber()
-    //     } else {
-    //       if (key === 'Backspace') {
-    //         textState.type = 'REMOVE'
-    //       } else if (key.length > 1) {
-    //         textState.type = 'HOTKEY'
-    //       } else {
-    //         textState.type = 'INSERT'
-    //         textState.oldValue = oldValue
-    //         textState.inserted = key
-    //       }
-    //     }
-    //     this.emitter.emit('text-change', textState)
-    //     changeType = null
-    //   } else {
-    //     textState.type = 'HOTKEY'
-    //     const selection = this.getSelection()
-    //     this.emitter.emit('selection-change', selection)
-    //   }
     })
   }
 
@@ -759,7 +733,8 @@ class HighlightManager {
   }
 
   set (head, tail) {
-    if (head === this.headNode && tail === this.tailNode) return this
+    if (head === this.headNode || tail === this.tailNode) return this
+    this.reset()
     this.headNode = head
     this.tailNode = tail
     this.headNode.style.color = this.textColor
@@ -783,7 +758,9 @@ class HighlightManager {
 export default function makeEditor (container, options) {
   const highlightManager = new HighlightManager()
   const editor = new Editable(container, options)
+
   editor.onSelectionChange((changes) => {
+    console.log(changes)
     if (changes.type === 'SINGLE_SELECTION') {
       const {node} = changes
       if (node.nodeName === 'SPAN') {
@@ -799,12 +776,22 @@ export default function makeEditor (container, options) {
   .beforeTextChange(changes => {
     const {key, node, event} = changes
     if (key === 'Backspace') {
-      if (node.nodeName === 'SPAN' && node.getAttribute('type') === 'TAIL') {
-        event.preventDefault()
-        editor.removeHighlight(node)
+      if (node.nodeName === 'SPAN') {
+        if (node.getAttribute('type') === 'TAIL') {
+          const nodeSelection = editor.getNodeSelection()
+          if (nodeSelection.ch !== 0) { // not remove line
+            event.preventDefault()
+            editor.removeHighlight(node)
+          }
+        } else if (node.getAttribute('type') === 'HEAD') {
+          const nodeSelection = editor.getNodeSelection()
+          if (nodeSelection.ch !== 0) { // not remove line
+            event.preventDefault()
+            editor.removeHighlight(node)
+          }
+        }
       }
     } else if (key === 'Enter') {
-      console.log(node)
       if (node.nodeName === 'SPAN') {
         const type = node.getAttribute('type')
         if (type === 'HEAD') {
@@ -814,25 +801,31 @@ export default function makeEditor (container, options) {
             event.preventDefault()
           }
         } else if (type === 'TAIL') {
-          console.log(editor.getNodeSelection())
+
         } else if (type === 'CONTAINER') {
 
         }
       }
     } else {
-      if (node.nodeName === 'SPAN' && node.getAttribute('type') === 'TAIL') {
-        const nodeSelection = editor.getNodeSelection()
-        if (nodeSelection.ch === 0) {
-          const previousNode = node.previousSibling
-          console.log(previousNode)
-          if (previousNode) {
-            if (previousNode.getAttribute('class') === node.getAttribute('class') && previousNode.getAttribute('type') === 'CONTAINER') {
-              previousNode.textContent += key
+      if (node.nodeName === 'SPAN') {
+        if (node.getAttribute('type') === 'TAIL') {
+          const nodeSelection = editor.getNodeSelection()
+          if (nodeSelection.ch === 0 && key.length === 1) {
+            const previousNode = node.previousSibling
+            if (previousNode) {
+              if (previousNode.getAttribute('class') === node.getAttribute('class') && previousNode.getAttribute('type') === 'CONTAINER') {
+                previousNode.textContent += key
+              } else {
+                editor.addContainerBefore({node, withText: key})
+              }
             } else {
               editor.addContainerBefore({node, withText: key})
             }
-          } else {
-            editor.addContainerBefore({node, withText: key})
+          }
+        } else if (node.getAttribute('type') === 'HEAD') {
+          const nodeSelection = editor.getNodeSelection()
+          if (nodeSelection.ch < node.getAttribute('value').length) {
+            event.preventDefault()
           }
         }
       }
@@ -840,6 +833,7 @@ export default function makeEditor (container, options) {
   })
   .onBeforePasteText (changes => {
     const {node, text, complete} = changes
+    console.log(node)
     switch (node.nodeName) {
       case 'DIV': {
         complete()
@@ -860,7 +854,8 @@ export default function makeEditor (container, options) {
             }
           }
         }
-        else if (node.getAttribute('type' === 'TAIL')) {
+        else if (node.getAttribute('type') === 'TAIL') {
+          console.log('reach')
           const nextNode = node.nextSibling
           const nodeSelection = editor.getNodeSelection()
           const textLength = node.getAttribute('value').length
@@ -892,7 +887,6 @@ export default function makeEditor (container, options) {
     const selection = editor.getSelection()
     if (selection.type === 'SINGLE_SELECTION') {
       if (selection.node.nodeName === '#text') {
-        highlightManager.reset()
         if (type === 'INSERT') {
           const {inserted, oldValue} = changes
           if (inserted === '{') {
@@ -910,10 +904,8 @@ export default function makeEditor (container, options) {
         const {node, startLine, startPos} = selection
         switch (type) {
           case 'INSERT': {
-            console.log(node)
             const {inserted} = changes
             if (node.getAttribute('type') === 'CONTAINER') {
-              highlightManager.reset()
               if (inserted === '{') {
                 const {word, selection} = editor.getCurrentWord()
                 const match = anyKeyMatch(word, AUTO_COMPLETE_TABLE, selection)
@@ -970,7 +962,9 @@ export default function makeEditor (container, options) {
               if (type === 'HEAD') {
                 editor.cleanUpWith({className: node.getAttribute('class')})
               } else if (type === 'TAIL') {
-
+                if (!node.getAttribute('id')) {
+                  node.parentNode.innerHTML = '<br>'
+                }
               } else if (type === 'CONTAINER') {
 
               }

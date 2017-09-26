@@ -336,7 +336,7 @@ const HTML_TABLE = {
     return katex.renderToString(values)
   },
   'math-sequence-block': (values) => {},
-  'code': () => {},
+  'code': (values) => `<div class='code-block'>${values.map((value) => value.value ? value.value : value).join('')}</div>`,
   'code-block': () => {},
   'display': (values) => {},
   'image-small': (values) => {},
@@ -384,7 +384,6 @@ function generateHtmlWith (tokens) {
     } else {
       const {type, value, closing} = token
       const func = HTML_TABLE[type]
-      console.log(type)
       return func(value)
     }
   }).join('')
@@ -442,6 +441,8 @@ function translate (input) {
     return '<div></div>'
   } else {
     const parsedTree = parse(TokenStream(InputStream(input)))
+    window.tree = parsedTree
+    console.log(JSON.stringify(parsedTree))
     return generateContainer(parsedTree)
   }
 }
