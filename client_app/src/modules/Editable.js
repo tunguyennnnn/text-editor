@@ -2,6 +2,8 @@ const _ = require('lodash')
 const EventEmitter = require('eventemitter3')
 import EditorState from './editable-helpers/EditorState'
 import * as IdManager from './editable-helpers/IdManager'
+import * as EditorPaser from './editable-helpers/EditorParser'
+import * as Dom from './editable-helpers/Dom'
 
 const AUTO_COMPLETE_TABLE = {
   "bold": "bold",
@@ -167,11 +169,42 @@ class Editable {
     })
   }
 
+  getNodes (selection) {
+    const sel = selection || this.getSelection()
+    const {startLine, endLine, startNode, endNode} = sel
+    if (startLine === endLine) {
+      const parentNode = this.editorBody.childNodes[startLine]
+      const childNodes = parentNode.childNodes
+      const startParentNode = Dom.getParentOf(startNode)
+      const endParentNode = Dom.getParentOf(endNode)
+      console.log(startParentNode)
+      console.log(endParentNode)
+      let res = []
+      let push = false
+      childNodes.forEach(node => {
+        if (push) {
+          if (node === endParentNode.parent) {
+            res.push(endParentNode)
+            return push = false
+          } else {
+            res.push(node)
+          }
+        } else {
+          if (node === startParentNode.parent) {
+            push = true
+            res.push(startParentNode)
+          }
+        }
+      })
+      return res
+    }
+  }
+
   getSelectionText (selection = this.getSelection()) {
     const {startNode, endNode, startLine, endLine, startPos, endPos} = selection
     if (startLine === endLine) {
       const parentNode = this.editorBody.childNodes[startLine]
-      return parentNode.textContent.slice(startPos, endPos)
+      return {text: parentNode.textContent.slice(startPos, endPos), nodeList: this.getNodes(selection)}
     } else {
 
     }
@@ -543,6 +576,9 @@ class Editable {
           changes.node = selection.node
           changes.event = e
           this.emitter.emit('before-text-change', changes)
+        } else {
+          e.preventDefault()
+          console.log(this.getSelectionText(selection))
         }
       }
     })
@@ -711,14 +747,6 @@ class Editable {
   }
 }
 
-function anyKeyMatch (word, acTable) {
-  const keys = _.keys(acTable)
-  return keys.filter((key) => {
-    const fullKey = `@${key}{`
-    return fullKey === word.slice(word.length - fullKey.length)
-  })[0]
-}
-
 function fixNode (node) {
   const childNode = node.childNodes[0]
 }
@@ -775,6 +803,7 @@ export default function makeEditor (container, options) {
   })
   .beforeTextChange(changes => {
     const {key, node, event} = changes
+    console.log(node)
     if (key === 'Backspace') {
       if (node.nodeName === 'SPAN') {
         if (node.getAttribute('type') === 'TAIL') {
@@ -824,7 +853,12 @@ export default function makeEditor (container, options) {
           }
         } else if (node.getAttribute('type') === 'HEAD') {
           const nodeSelection = editor.getNodeSelection()
-          if (nodeSelection.ch < node.getAttribute('value').length) {
+          if (nodeSelection.ch === 0) {
+            const parentNode = nodeSelection.node.parentNode
+            parentNode.parentNode.insertBefore(document.createTextNode(key), parentNode)
+            EditorState.updateSource('API')
+          }
+          else if (nodeSelection.ch < node.getAttribute('value').length) {
             event.preventDefault()
           }
         }
@@ -855,7 +889,6 @@ export default function makeEditor (container, options) {
           }
         }
         else if (node.getAttribute('type') === 'TAIL') {
-          console.log('reach')
           const nextNode = node.nextSibling
           const nodeSelection = editor.getNodeSelection()
           const textLength = node.getAttribute('value').length
@@ -892,7 +925,7 @@ export default function makeEditor (container, options) {
           if (inserted === '{') {
             const {word, nodeType, node, selection} = editor.getCurrentWord()
             if (nodeType === '#text') {
-              const match = anyKeyMatch(word, AUTO_COMPLETE_TABLE, selection)
+              const match = EditorPaser.anyKeyMatch(word, AUTO_COMPLETE_TABLE)
               if (match) {
                 const {startLine, startPos} = selection
                 editor.insertMarkDownNodes({line: startLine, ch: startPos, mdType: match})
@@ -908,30 +941,31 @@ export default function makeEditor (container, options) {
             if (node.getAttribute('type') === 'CONTAINER') {
               if (inserted === '{') {
                 const {word, selection} = editor.getCurrentWord()
-                const match = anyKeyMatch(word, AUTO_COMPLETE_TABLE, selection)
+                const match = EditorPaser.anyKeyMatch(word, AUTO_COMPLETE_TABLE)
                 if (match) {
                   const {startLine, startPos} = selection
                   editor.insertMarkDownNodesWithBreak({line: startLine, ch: startPos, mdType: match, container: node})
                 }
               }
             } else if (node.getAttribute('type') === 'HEAD') {
-              const defaultText = node.getAttribute('value')
-              const nextNode = node.nextSibling
-              const currentText = node.textContent
-              node.textContent = defaultText
-              if (currentText.indexOf(defaultText) === 0) {
-                const extraText = currentText.replace(defaultText, '')
-                if (nextNode) {
-                  nextNode.textContent = extraText + nextNode.textContent
-                  editor.setCaretAt({line: startLine, ch: startPos})
-                } else {
-                  const newNode = document.createTextNode(extraText)
-                  node.parentNode.appendChild(newNode)
-                  editor.setCaretAt({line: startLine, ch: startPos})
-                }
-              } else {
-                editor.setCaretAt({line: startLine, ch: startPos})
-              }
+
+              // const defaultText = node.getAttribute('value')
+              // const nextNode = node.nextSibling
+              // const currentText = node.textContent
+              // node.textContent = defaultText
+              // if (currentText.indexOf(defaultText) === 0) {
+              //   const extraText = currentText.replace(defaultText, '')
+              //   if (nextNode) {
+              //     nextNode.textContent = extraText + nextNode.textContent
+              //     editor.setCaretAt({line: startLine, ch: startPos})
+              //   } else {
+              //     const newNode = document.createTextNode(extraText)
+              //     node.parentNode.appendChild(newNode)
+              //     editor.setCaretAt({line: startLine, ch: startPos})
+              //   }
+              // } else {
+              //   editor.setCaretAt({line: startLine, ch: startPos})
+              // }
             } else if (node.getAttribute('type') === 'TAIL') {
               const defaultText = node.getAttribute('value')
               const nextNode = node.nextSibling
