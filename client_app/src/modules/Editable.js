@@ -575,7 +575,10 @@ class Editable {
           changes.key = key
           changes.node = selection.node
           changes.event = e
-          this.emitter.emit('before-text-change', changes)
+          changes.selection = selection
+          if (key === 'Enter' || key === 'Backspace' || key.length === 1) {
+            this.emitter.emit('before-text-change', changes)
+          }
         } else {
           e.preventDefault()
           console.log(this.getSelectionText(selection))
@@ -802,15 +805,26 @@ export default function makeEditor (container, options) {
     }
   })
   .beforeTextChange(changes => {
-    const {key, node, event} = changes
+    const {key, node, event, selection} = changes
     console.log(node)
     if (key === 'Backspace') {
       if (node.nodeName === 'SPAN') {
         if (node.getAttribute('type') === 'TAIL') {
           const nodeSelection = editor.getNodeSelection()
-          if (nodeSelection.ch !== 0) { // not remove line
+          if (nodeSelection.ch === node.getAttribute('value').length) { // not remove line
             event.preventDefault()
             editor.removeHighlight(node)
+          } else if (nodeSelection.ch === 0) {
+            const parentDiv = node.parentNode
+            const previousParent = parentDiv.previousSibling
+            if (previousParent) {
+              const childNodes = parentDiv.childNodes
+              const ch = previousParent.textContent.length
+              childNodes.forEach((node) => previousParent.appendChild(node))
+              parentDiv.parentNode.removeChild(parentDiv)
+              editor.setCaretAt({line: previousParent.getAttribute('line'), ch})
+              EditorState.updateSource('API')
+            }
           }
         } else if (node.getAttribute('type') === 'HEAD') {
           const nodeSelection = editor.getNodeSelection()
@@ -839,7 +853,7 @@ export default function makeEditor (container, options) {
       if (node.nodeName === 'SPAN') {
         if (node.getAttribute('type') === 'TAIL') {
           const nodeSelection = editor.getNodeSelection()
-          if (nodeSelection.ch === 0 && key.length === 1) {
+          if (nodeSelection.ch === 0) {
             const previousNode = node.previousSibling
             if (previousNode) {
               if (previousNode.getAttribute('class') === node.getAttribute('class') && previousNode.getAttribute('type') === 'CONTAINER') {
@@ -850,16 +864,42 @@ export default function makeEditor (container, options) {
             } else {
               editor.addContainerBefore({node, withText: key})
             }
+          } else if (nodeSelection.ch === node.getAttribute('value').length) {
+            event.preventDefault()
+            const nextNode = node.nextSibling
+            if (nextNode) {
+              if (nextNode.nodeName === '#text') {
+                nextNode.textContent = key + nextNode.textContent
+              } else {
+                node.parentNode.insertBefore(document.createTextNode(key), nextNode)
+              }
+            } else {
+              node.parentNode.appendChild(document.createTextNode(key))
+            }
+            const {startLine, startPos} = selection
+            editor.setCaretAt({line: startLine, ch: startPos + 1})
+            EditorState.updateSource('API')
           }
         } else if (node.getAttribute('type') === 'HEAD') {
           const nodeSelection = editor.getNodeSelection()
+          event.preventDefault()
           if (nodeSelection.ch === 0) {
             const parentNode = nodeSelection.node.parentNode
             parentNode.parentNode.insertBefore(document.createTextNode(key), parentNode)
             EditorState.updateSource('API')
           }
           else if (nodeSelection.ch < node.getAttribute('value').length) {
-            event.preventDefault()
+            // TODO change tag
+          } else {
+            const nextNode = node.nextSibling
+            if (nextNode) {
+              nextNode.textContent = key + nextNode.textContent
+            } else {
+              node.parentNode.appendChild(document.createTextNode(key))
+            }
+            const {startLine, startPos} = selection
+            editor.setCaretAt({line: startLine, ch: startPos + 1})
+            EditorState.updateSource('API')
           }
         }
       }
@@ -948,7 +988,6 @@ export default function makeEditor (container, options) {
                 }
               }
             } else if (node.getAttribute('type') === 'HEAD') {
-
               // const defaultText = node.getAttribute('value')
               // const nextNode = node.nextSibling
               // const currentText = node.textContent
@@ -963,24 +1002,22 @@ export default function makeEditor (container, options) {
               //     node.parentNode.appendChild(newNode)
               //     editor.setCaretAt({line: startLine, ch: startPos})
               //   }
-              // } else {
-              //   editor.setCaretAt({line: startLine, ch: startPos})
               // }
             } else if (node.getAttribute('type') === 'TAIL') {
-              const defaultText = node.getAttribute('value')
-              const nextNode = node.nextSibling
-              const extraText = node.textContent.replace(defaultText, '')
-              node.textContent = defaultText
-              if (nextNode) {
-                if (nextNode.nodeName === '#text') {
-                  nextNode.textContent = extraText + nextNode.textContent
-                } else {
-                  node.parentNode.insertBefore(document.createTextNode(extraText), nextNode)
-                }
-              } else {
-                node.parentNode.appendChild(document.createTextNode(extraText))
-              }
-              editor.setCaretAt({line: startLine, ch: startPos})
+              // const defaultText = node.getAttribute('value')
+              // const nextNode = node.nextSibling
+              // const extraText = node.textContent.replace(defaultText, '')
+              // node.textContent = defaultText
+              // if (nextNode) {
+              //   if (nextNode.nodeName === '#text') {
+              //     nextNode.textContent = extraText + nextNode.textContent
+              //   } else {
+              //     node.parentNode.insertBefore(document.createTextNode(extraText), nextNode)
+              //   }
+              // } else {
+              //   node.parentNode.appendChild(document.createTextNode(extraText))
+              // }
+              // editor.setCaretAt({line: startLine, ch: startPos})
             }
           }
           case 'REMOVE': {
