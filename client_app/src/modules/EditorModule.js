@@ -8,7 +8,6 @@ export function currentWord (editor) {
   return words[len - 1]
 }
 
-
 export function insertWord (editor, word) {
   editor.replaceSelection(word)
 }
