@@ -78,16 +78,12 @@ class Editable {
   getNodes (selection) {
     const sel = selection || this.getSelection()
     const {startLine, endLine, startNode, endNode} = sel
+    let res = []
     if (startLine === endLine) {
       const parentNode = this.editorBody.childNodes[startLine]
       const childNodes = parentNode.childNodes
       const startParent = Dom.getParentOf(startNode)
       const endParent = Dom.getParentOf(endNode)
-      console.log(startParent)
-      console.log(endParent)
-      console.log()
-      console.log(startParent.parent === endParent.parent)
-      let res = []
       if (startParent.parent === endParent.parent) {
         res = [startParent]
       } else {
@@ -98,7 +94,7 @@ class Editable {
               res.push(endParent)
               return push = false
             } else {
-              res.push(node)
+              res.push(Dom.getParentOf(node))
             }
           } else {
             if (node === startParent.parent) {
@@ -109,6 +105,31 @@ class Editable {
         })
       }
       return res
+    } else {
+      const childNodes = []
+      _.range(startLine, endLine + 1).map(lineNumber => {
+        this.editorBody.childNodes[lineNumber].childNodes.forEach(node => childNodes.push(node))
+      })
+      console.log(childNodes)
+      const startParent = Dom.getParentOf(startNode)
+      const endParent = Dom.getParentOf(endNode)
+      let push = false
+      childNodes.forEach(node => {
+        if (push) {
+          if (node === endParent.parent) {
+            res.push(endParent)
+            return push = false
+          } else {
+            res.push(Dom.getParentOf(node))
+          }
+        } else {
+          if (node === startParent.parent) {
+            push = true
+            res.push(startParent)
+          }
+        }
+      })
+      return res
     }
   }
 
@@ -118,7 +139,7 @@ class Editable {
       const parentNode = this.editorBody.childNodes[startLine]
       return {text: parentNode.textContent.slice(startPos, endPos), nodeList: this.getNodes(selection)}
     } else {
-
+      return {text: '', nodeList: this.getNodes(selection)}
     }
   }
 
@@ -176,7 +197,7 @@ class Editable {
             startNode
           }
         }
-        if (startContainer.nodeName === 'DIV') {
+        if (endContainer.nodeName === 'DIV') {
           endObjects = {
             endLine: Number(endContainer.getAttribute('line')),
             endPos: 0,
@@ -397,6 +418,11 @@ class Editable {
     return this
   }
 
+  beforeTextChangeMultiple (fn) {
+    this.emitter.on('before-text-change-multiple', changes => fn(changes))
+    return this
+  }
+
   onSelectionChange (fn) {
     this.emitter.on('selection-change', changes => {
       fn(changes)
@@ -500,13 +526,11 @@ class Editable {
             return
           }
         } else {
-          const {text, nodeList} = this.getSelectionText(selection)
-          if (nodeList.length === 1) {
-            const {type} = nodeList[0]
-            console.log(type)
-            if (type === 'HEAD' || type === 'TAIL') {
-              e.preventDefault()
-            }
+          if (!ctrlKey) {
+            const {text, nodeList} = this.getSelectionText(selection)
+            this.emitter.emit('before-text-change-multiple', {key, event: e, text, nodeList})
+          } else {
+            e.preventDefault()
           }
         }
       }
@@ -840,6 +864,22 @@ export default function makeEditor (container, options) {
             EditorState.updateSource('API')
           }
         }
+      }
+    }
+  })
+  .beforeTextChangeMultiple (changes => {
+    const {nodeList, key, text, event} = changes
+    if (nodeList.length === 1) {
+      console.log(nodeList)
+      if (nodeList[0].type !== 'CONTAINER' && nodeList[0].type !== '#text') {
+        event.preventDefault()
+      }
+    } else {
+      const removeList = Dom.isGoodTobeReplaced(nodeList)
+      if (removeList) {
+        removeList.forEach(className => $(`.${className}`).remove())
+      } else {
+        event.preventDefault()
       }
     }
   })
