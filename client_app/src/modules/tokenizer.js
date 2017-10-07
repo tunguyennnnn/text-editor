@@ -336,12 +336,17 @@ const HTML_TABLE = {
     return katex.renderToString(values)
   },
   'math-sequence-block': (values) => {},
-  'code': (values) => `<div class='code-block'>${values.map((value) => value.value ? value.value : value).join('')}</div>`,
+  'code': (values) => {
+    const res = values.map((value) => value.value ? value.value : value).join('')
+    return `<pre class='code-block'><code>${res}</code></div>`
+  },
   'code-block': () => {},
   'display': (values) => {},
   'image-small': (values) => {},
   'image-medium': (values) => {},
-  'image-large': (values) => {},
+  'image-large': (values) => {
+    return `<div><a href="${values}" data-lightbox="image-1" data-title="My caption">Image #1</a></div>`
+  },
   'newline': (values) => {},
   'center': (values) => {},
   'table': (values) => {

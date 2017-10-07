@@ -1,0 +1,35 @@
+@title{Getting Started With React Redux: An Intro}
+
+At Codementor, we’ve used React + Redux to build several projects. There are projects made entirely with Redux, and there are projects where we’ve used Redux along with an existing Fluxxor project.
+
+Redux seems to be pretty popular right now, so I shall write this tutorial before I forget anything.
+
+This is the first part of the React & Redux series:
+@ul{
+@it{Getting Started with Redux: this article will introduce readers to Redux based on what I know, and also mention what’s so great about its design}
+@it{Sever-side Rendering a Redux App: this tutorial goes through how to use Redux and react-router for server rendering.
+}
+@it{Unit Testing a Redux App: this article talks about the problems I’ve ran into when testing Redux code and how I solved them, and also goes over how to make your unit tests co-exist with webpack loaders.}
+}
+
+The goal of this article is not to teach you how to build a Redux app (╯°□°）╯Wait~ don’t close teh tab~
+
+By the end of reading this article, you should have a better idea of how to structure your apps and how to solve problems after reading the Redux documentation.
+
+@sub{Redux?}
+
+@code{
+function todos(state, action) {
+  switch(action.type) {
+    	case 'ADD_TODO':
+        	// handle action and return new state here
+
+    `}
+`}
+}
+
+In a more complex app, we will need to split up a store’s state into different pieces like we’d do when namespacing. You can do this in Redux by creating different reducers to manage different areas of a state, and then merge them together through combineReducers.
+
+The process should look like this:
+
+@img-l{https://s3.amazonaws.com/codementor_content/2016-Mar/redux2.jpg}

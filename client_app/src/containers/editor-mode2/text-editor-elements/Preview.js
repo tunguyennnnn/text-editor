@@ -12,7 +12,7 @@ class Preview extends React.Component {
     const preview = `<div>${translate2(previewText.filter((line) => line).join(' '))}</div>`
     //const preview = `<div>${translate(previewText.filter((line) => line).join(' '))}</div>`
     this.previewer.innerHTML = preview
-    $('div.code-block').each((i, block) => {
+    $('pre.code-block').each((i, block) => {
        hljs.highlightBlock(block)
     })
     this.previewerContainer.scrollTop = $(this.previewer).height()
