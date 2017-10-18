@@ -441,15 +441,19 @@ function generateContainer (object) {
   return CONTAINER_TABLE[type](value, content)
 }
 
+function parser (input) {
+  return parse(TokenStream(InputStream(input)))
+}
+
 function translate (input) {
   if (/^\n+$/.test(input)) {
     return '<div></div>'
   } else {
-    const parsedTree = parse(TokenStream(InputStream(input)))
+    const parsedTree = parser(input)
     window.tree = parsedTree
-    console.log(JSON.stringify(parsedTree))
+    //console.log(JSON.stringify(parsedTree))
     return generateContainer(parsedTree)
   }
 }
 
-export default translate
+export {translate, parser}

@@ -1,6 +1,5 @@
 import React from 'react'
-import translate from '../../../modules/converter'
-
+import {translate} from '../../../modules/converter'
 import {bindActionCreators} from 'redux'
 import {connect} from 'react-redux'
 
