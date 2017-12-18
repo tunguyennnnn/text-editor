@@ -1,0 +1,211 @@
+{
+  "document": {
+    "nodes": [
+      {
+        "kind": "block",
+        "type": "paragraph",
+        "nodes": [
+          {
+            "kind": "text",
+            "leaves": [
+              {
+                "text": "There are certain behaviors that require rendering dynamic marks on string of text, like rendering code highlighting. For example:"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "block",
+        "type": "code",
+        "data": {
+          "language": "js"
+        },
+        "nodes": [
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "// A simple FizzBuzz implementation."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "for (var i = 1; i <= 100; i++) {"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "  if (i % 15 == 0) {"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "    console.log('Fizz Buzz');"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "  } else if (i % 5 == 0) {"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "    console.log('Buzz');"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "  } else if (i % 3 == 0) {"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "    console.log('Fizz');"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "  } else {"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "    console.log(i);"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "  }"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "block",
+            "type": "code_line",
+            "nodes": [
+              {
+                "kind": "text",
+                "leaves": [
+                  {
+                    "text": "}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "block",
+        "type": "paragraph",
+        "nodes": [
+          {
+            "kind": "text",
+            "leaves": [
+              {
+                "text": "Try it out for yourself!"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
