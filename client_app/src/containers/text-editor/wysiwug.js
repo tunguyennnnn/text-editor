@@ -2,9 +2,9 @@ import Plain from 'slate-plain-serializer'
 import { Editor } from 'slate-react'
 import Prism from 'prismjs'
 import React from 'react'
-import Menu from './Menu'
-import MenuList from './MenuList'
-import { markGroup, markPlugins, blockGroup, blockPlugins, html, schema } from './slate-config.js'
+import MenuList from './wysiwug/MenuList'
+import Menu from './wysiwug/Menu'
+import { markGroup, mapping, plugin, blockGroup, html, schema } from './wysiwug/slate-config.js'
 
 function insertImage(change, src, target) {
   if (target) {
@@ -18,6 +18,18 @@ function insertImage(change, src, target) {
   })
 }
 
+function handleCodeBlock (event, change) {
+  const {value} = change
+  if (event.key === 'Enter') {
+    if (value.isExpanded) change.delete()
+    change.insertText('\n')
+    return true
+  } else if (event.key === '{') {
+    change.insertText('{}')
+    event.preventDefault()
+  }
+}
+
 
 const iconList = [
   {type: 'bold', hotKey: '⌘+B', icon: 'format_bold'},
@@ -28,7 +40,46 @@ const iconList = [
   {type: 'code', hotKey: '⌘+C', icon: 'code'}
 ]
 
-class App extends React.Component {
+
+function handleHotKey (event, change) {
+  const match = mapping[event.key]
+  if (match) {
+    event.preventDefault()
+    const [nodeType, type] = match
+    if (nodeType === 'node') {
+      change.toggleMark(type)
+      return true
+    } else {
+      change.setBlock(type)
+      return true
+    }
+  }
+  return
+}
+
+function handleNewLine (event, change) {
+  const {value} = change
+  const {startBlock} = value
+  switch (startBlock.type) {
+    case 'code': {
+      return handleCodeBlock(event, change)
+    }
+    case 'math': {
+      event.preventDefault()
+      change.insertBlock({type: 'paragraph'})
+      return
+    }
+    default: {
+      return
+    }
+  }
+}
+
+function handleAutoComplete (event, change) {
+  return
+}
+
+export default class Wysiwug extends React.Component {
   state = {
     value: Plain.deserialize(''),
   }
@@ -44,11 +95,13 @@ class App extends React.Component {
   updateMenu = () => {
     const { value } = this.state
     const menu = this.menu
+
     if (!menu) return
     if (value.isBlurred || value.isEmpty) {
       menu.removeAttribute('style')
       return
     }
+
     const selection = window.getSelection()
     const range = selection.getRangeAt(0)
     const rect = range.getBoundingClientRect()
@@ -67,7 +120,8 @@ class App extends React.Component {
 
   onChange = ({ value }) => {
     // console.log(html.serialize(value))
-    this.setState({ value })
+    // this.setState({ value })
+    this.props.saveChange(value)
   }
 
   onClickImage = (event) => {
@@ -97,7 +151,6 @@ class App extends React.Component {
     const string = texts.map(t => t.text).join('\n')
     const grammar = Prism.languages[language]
     const tokens = Prism.tokenize(string, grammar)
-    console.log(texts, string, tokens)
     const decorations = []
     let startText = texts.shift()
     let endText = startText
@@ -144,14 +197,25 @@ class App extends React.Component {
     return decorations
   }
 
+  onSelection () {
+    console.log(333333333)
+  }
+
   onKeyDown = (event, change) => {
-    const {value} = change
-    const {startBlock} = value
-    if (event.key !== 'Enter') return
-    if (startBlock.type != 'code') return
-    if (value.isExpanded) change.delete()
-    change.insertText('\n')
-    return true
+    const {activeMarks} = change.value
+    if (activeMarks) {
+      const marks = activeMarks.toArray()
+      if (marks.length > 0) {
+        // console.log(marks[0])
+      }
+    }
+    if (event.metaKey) {
+      return handleHotKey(event, change)
+    } else if (event.key === 'Enter') {
+      return handleNewLine(event, change)
+    } else {
+      return handleAutoComplete(event, change)
+    }
   }
 
   render() {
@@ -165,9 +229,10 @@ class App extends React.Component {
         />
         <Editor
           placeholder='Enter a title...'
-          plugins={blockPlugins}
-          value={this.state.value}
+          // plugins={plugin}
+          value={this.props.value}
           onKeyDown={this.onKeyDown}
+          onSelection={this.onSelection}
           schema={schema}
           onChange={this.onChange}
           renderMark={this.renderMark}
@@ -179,25 +244,12 @@ class App extends React.Component {
   }
 
   renderNode = (props) => {
-    if (blockGroup[props.node.type]) return blockGroup[props.node.type].render(props)
+    const type = this.props.value.anchorBlock.type
+    if (blockGroup[props.node.type]) return blockGroup[props.node.type].render(props, type === 'math')
   }
 
   renderMark = (props) => {
-    console.log(props.mark.type)
     if (markGroup[props.mark.type]) return markGroup[props.mark.type].render(props)
   }
 
 }
-export default App
-
-//
-// <div className="menu toolbar-menu">
-//   <span className="button" onMouseDown={this.onClickImage}>
-//     <span className="material-icons">image</span>
-//   </span>
-// </div>
-// <Menu
-//   menuRef={this.menuRef}
-//   value={this.state.value}
-//   onChange={this.onChange}
-// />

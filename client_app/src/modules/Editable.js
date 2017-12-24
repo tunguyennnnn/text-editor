@@ -5,7 +5,7 @@ import * as IdManager from './editable-helpers/IdManager'
 import * as EditorPaser from './editable-helpers/EditorParser'
 import * as Dom from './editable-helpers/Dom'
 import EditorInfo from './editable-helpers/EditorInfo'
-import * as HtmlGenrator from './EditorHtmlGenerator'
+import HtmlGenrator from './EditorHtmlGenerator'
 
 class Editable {
   constructor (container, options = {}) {
@@ -538,7 +538,7 @@ class Editable {
     })
 
     $(this.editorBody).keyup(e => {
-      console.log(HtmlGenrator.generateFrom(this.getFullText()))
+      //console.log(HtmlGenrator.generateFrom(this.getFullText()))
       const {key, ctrlKey} = e
       if (!ctrlKey) {
         if (key === 'Enter') {

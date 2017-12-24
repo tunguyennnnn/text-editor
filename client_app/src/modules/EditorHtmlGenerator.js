@@ -23,6 +23,7 @@ function groupString (list) {
   const resList = []
   let currentString = null
   const flattenList = flattenContent(list)
+  console.log(flattenList)
   flattenList.forEach(el => {
     if (el.constructor.name === 'String') {
       if (currentString) currentString += el
@@ -31,7 +32,10 @@ function groupString (list) {
       if (el.type === 'whitespace') {
         if (el.value === ' ') currentString = currentString ? currentString + ' ' : ' '
         else if (el.value === '\n') {
-          if (currentString) resList.push(currentString)
+          if (currentString) {
+            resList.push(currentString)
+            currentString = null
+          }
           resList.push('\n')
         }
       } else {
@@ -46,48 +50,40 @@ function groupString (list) {
 }
 
 function getInnerText (values) {
-  console.log(values)
   return values.map(value => {
     return value.value ? value.value : value
   }).join('')
 }
 
 function singleTemplate (values, className) {
-  return `<span type='CONTAINER' class='${className}'>
-            <span type='HEAD' class='${className}>
-            ${getInnerText(values)}
-            </span>
-          </span>
-          <span class='${className}></span>`
+  return [`<span type='HEAD' class='${className}>`,
+          getInnerText(values),
+          `</span>`].join('')
 }
 
 const HTML_TABLE = {
   title: (values) => {
     const className = Date.now()
-    return singleTemplate(values, className)
+    return '<div>' + singleTemplate(values, className) + '</div>'
   },
   sub: (values) => {
     const className = Date.now()
     return `<span> type=''`
   },
   p: (values) => {
-    console.log(values)
     if (values.length === 0) return ''
     else {
       const className = Date.now()
-      return `<span class="${className}" type="CONTAINER">
-                <span class="${className}" type="HEAD">@p{</span>
-                ${values}
-              </span>
-              <span class="${className}" type="TAIL">}</span>`
+      return [`<span class="${className}" type="HEAD">@p{</span>`,
+              getTextOf(values),
+              `<span class="${className}" type="TAIL">}</span>`].join('')
     }
   },
   bold: (values) => {
     const className = Date.now()
     const htmlValues = recursiveGen(values, className)
-    console.log(htmlValues)
     const first = htmlValues[0] || ''
-    return `<span class="${className}" type="CONTAINER"><span class="${className}" type="HEAD">@bold{</span>${first}</span>${htmlValues.slice(1).join('')}<span class="${className}" type="TAIL">}</span>`
+    return `<span class="${className}" id="bold-${className}" pairId="close-${className}" type="HEAD">@bold{</span>${first}${htmlValues.slice(1).join('')}<span id="close-${className}" pairId="bold-${className}" class="${className}" type="TAIL">}</span>`
 
   }
 }
@@ -97,12 +93,12 @@ function recursiveGen (contents, context) {
   console.log(groupList)
   return groupList.map((content, i) => {
     if (content.constructor.name === 'String') {
-      console.log(content)
       if (content === '\n') return '</div><div>'
-      if (context) {
-        if (i === 0) return content
-        return `<span class="${context}" type="CONTAINER">${content}</span>`
-      } else return content
+      return content
+      // if (context) {
+      //   if (i === 0) return content
+      //   return `<span class="${context}" type="CONTAINER">${content}</span>`
+      // } else return content
     }
     else {
       const {type, value} = content
@@ -111,25 +107,74 @@ function recursiveGen (contents, context) {
   })
 }
 
+function getTextOf (value) {
+  return value.map(v => {
+    if (v.type) {
+      if (v.type === 'whitespace') {
+        return v.value === '\n' ? '</div><div>' : ' '
+      } else {
+        return getTextOf(v.value)
+      }
+    } else {
+      return v
+    }
+  })
+}
+
+function generateP (p, content) {
+  const {value} = p
+  let pHtml = ''
+  if (value.length !== 0) {
+    pHtml = HTML_TABLE['p'](value)
+  }
+  const contentHtml = content.map(c => {
+    console.log(c)
+    if (!c.type) return c
+    else {
+      if (c.type === 'whitespace') {
+        return c.value === '\n' ? '</div><div>' : ' '
+      } else {
+        return HTML_TABLE[c.type](c.value)
+      }
+    }
+  })
+  return '<div>' + pHtml + contentHtml + '</div>'
+}
+
+
 export function generateFrom (input) {
+  //console.log(input)
   const parseTree = parser(input)
-  console.log(parseTree)
   const {container, content} = parseTree
   let title = ''
   if (container.type === 'title') {
     title = HTML_TABLE.title(container.value)
   }
-  content.map(c => {
-    const {container, content} = c
-    const {type, value, closing} = container
-    const html = content.map(c => {
-      if (c.constructor.name === 'String') return `<div>${c}</div>`
-      const {type, value} = c
-      if (type === 'whitespace') {
-        return '<div></br></div>'
+  const contentHtml = content.map(c => {
+    console.log(c)
+    switch (c.container.type) {
+      case 'p': {
+        return generateP(c.container, c.content)
       }
-      return `<div>${HTML_TABLE[type](value)}</div>`
-    })
-    $('#text-editor-preview').children().first().html(html)
+      default:
+        return ''
+    }
   })
+  // console.log(content)
+  // const contentHtml = content.map(c => {
+  //   const {content} = c
+  //   const html = content.map(c => {
+  //     console.log(c)
+  //     if (c.constructor.name === 'String') return `<div>${c}</div>`
+  //     const {type, value} = c
+  //     if (type === 'whitespace') {
+  //       return value
+  //     }
+  //     return `<div>${HTML_TABLE[type](value)}</div>`
+  //   }).join('')
+  //   return html
+  // }).join('')
+  //console.log(contentHtml)
+
+  return title + contentHtml
 }

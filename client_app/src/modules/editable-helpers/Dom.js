@@ -1,5 +1,11 @@
 const _ = require('lodash')
 
+export function getNode (node) {
+  const type = node.nodeName
+  if (type === '#text' || type === 'BR') return node.parentNode
+  return node
+}
+
 export function getParentOf (node) {
   const type = node.nodeName
   switch (type) {
@@ -40,7 +46,7 @@ export function isGoodTobeReplaced (nodeList) {
   nodeList.forEach(n => {
     const node = n.parent
     const type = n.type
-    console.log(node, scopeTable)
+    //console.log(node, scopeTable)
     if (type !== '#text') {
       if (type === 'HEAD') {
         const attr = node.getAttribute('class')
@@ -60,7 +66,7 @@ export function isGoodTobeReplaced (nodeList) {
       }
     }
   })
-  console.log(scopeTable)
+  //console.log(scopeTable)
   if (_.keys(scopeTable).length === 0) {
     return removeList
   }

@@ -8,10 +8,9 @@ import TextEditor from './text-editor-elements/TextEditor'
 
 class EditorMode1 extends React.Component {
   render () {
-    const style = {position: 'relative', overflow: 'hidden'}
     return (
       <div style={{}}>
-        <TextEditor preview={this.props.preview}/>
+        <TextEditor preview={this.props.preview} />
         <Preview />
       </div>
     )

@@ -280,7 +280,6 @@ class Element {
     //   return tag + header.toHtml() + closeTag
     // }).join('')
 
-    console.log(this.groupTableRow({cells: el.children.filter((child) => child.type === 'TABLE_CELL'), colNumber, rowNumber}))
     const cells = this.groupTableRow({cells: el.children.filter((child) => child.type === 'TABLE_CELL'), colNumber, rowNumber})
     .map((rowCells) => {
       return '<tr>' + rowCells.map((cell) => {
@@ -518,10 +517,10 @@ class Parser {
 export function translate1 (string) {
   const tokenizer = new Tokenizer()
   const tokens = tokenizer.tokenize(string)
-  console.log(tokens)
+  //console.log(tokens)
   const parsedTree = new Parser(tokens)
-  console.log(parsedTree)
-  console.log(parsedTree.toHtml())
+  //console.log(parsedTree)
+  //console.log(parsedTree.toHtml())
   return parsedTree.toHtml()
 }
 

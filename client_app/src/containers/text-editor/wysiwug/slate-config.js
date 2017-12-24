@@ -4,7 +4,8 @@ import Html from 'slate-html-serializer'
 import { Block, Value } from 'slate'
 import isImage from 'is-image'
 import isUrl from 'is-url'
-
+import katex from 'katex'
+import ReactHtmlParser, { processNodes, convertNodeToElement, htmlparser2 } from 'react-html-parser'
 function markHotKey (options) {
   const {key, type} = options
   return {
@@ -55,8 +56,21 @@ export const blockGroup = {
   },
   section: {
     key: 's',
-    render: (props) => <h3>{props.children}</h3>,
-    serialize: (children) => <h3>{children}</h3>
+    render: (props) => <h2>{props.children}</h2>,
+    serialize: (children) => <h2>{children}</h2>
+  },
+  math: {
+    key: 'm',
+    render: (props, focus) => {
+      const res = !focus ? ReactHtmlParser(katex.renderToString('c = \\pm\\sqrt{a^2 + b^2}')) : props.children
+      return (
+        <p class='math-block'>
+          <span class='math-block-span'>
+            {res}
+          </span>
+        </p>
+      )
+    }
   },
   image: {
     key: 'e',
@@ -99,11 +113,35 @@ export const markGroup = {
     key: 'i',
     render: (props) => <em>{props.children}</em>,
     serialize: (children) => <em>{children}</em>
+  },
+  math: {
+    key: 'm',
+    render: props => {
+      return <span class='highlight-line'>{props.children}</span>
+    }
   }
 }
 
+export const mapping = {
+  b: ['node', 'bold'],
+  i: ['node', 'italic'],
+  p: ['block', 'paragraph'],
+  c: ['block', 'code'],
+  t: ['block', 'title'],
+  s: ['block', 'section'],
+  m: ['block', 'math']
+}
 export const markPlugins = _.keys(markGroup).map((type) => markHotKey({type, key: markGroup[type].key}))
 export const blockPlugins = _.keys(blockGroup).map((type) => nodeHotKey({type, key: blockGroup[type].key}))
+
+export function plugin () {
+  return {
+    onKeyDown (event, change) {
+      console.log(event)
+    }
+  }
+}
+
 /* Serialization */
 const rules = [
   {
@@ -140,10 +178,11 @@ export const schema = {
   document: {
     nodes: [
       { types: ['title'], min: 1, max: 1 },
-      { types: ['paragraph', 'section', 'code', 'image'], min: 1 }
+      { types: ['paragraph', 'section', 'code', 'image', 'math'], min: 5 }
     ],
+    last: {type: ['paragraph']},
     normalize: (change, reason, { node, child, index }) => {
-      console.log(reason)
+      console.log(reason, child, child, index)
       switch (reason) {
         case 'child_type_invalid': {
           return change.setNodeByKey(child.key, index === 0 ? 'title' : 'paragraph')

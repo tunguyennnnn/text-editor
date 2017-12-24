@@ -4,7 +4,7 @@ import thunk from 'redux-thunk'
 import rootEpics from './epics'
 import {browserHistory} from 'react-router'
 import { routerMiddleware } from 'react-router-redux'
-import rootReducer from './reducers/AllReducers'
+import rootReducer from './AllReducers'
 
 const epicMiddleware = createEpicMiddleware(rootEpics)
 
@@ -31,6 +31,7 @@ export default function configureStore (initialState) {
   }
   return createStore(
     rootReducer,
+    window.__REDUX_DEVTOOLS_EXTENSION__ && window.__REDUX_DEVTOOLS_EXTENSION__(),
     initialState,
     enhancer
   )
