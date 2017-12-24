@@ -206,7 +206,7 @@ export default class Wysiwug extends React.Component {
     if (activeMarks) {
       const marks = activeMarks.toArray()
       if (marks.length > 0) {
-        // console.log(marks[0])
+        console.log(marks[0].type, marks[0].data)
       }
     }
     if (event.metaKey) {

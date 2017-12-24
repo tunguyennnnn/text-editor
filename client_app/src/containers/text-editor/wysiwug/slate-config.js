@@ -129,7 +129,7 @@ export const mapping = {
   c: ['block', 'code'],
   t: ['block', 'title'],
   s: ['block', 'section'],
-  m: ['block', 'math']
+  m: ['node', 'math']
 }
 export const markPlugins = _.keys(markGroup).map((type) => markHotKey({type, key: markGroup[type].key}))
 export const blockPlugins = _.keys(blockGroup).map((type) => nodeHotKey({type, key: blockGroup[type].key}))
