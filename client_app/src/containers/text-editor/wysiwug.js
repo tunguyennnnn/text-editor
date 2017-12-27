@@ -1,4 +1,5 @@
 import Plain from 'slate-plain-serializer'
+import * as _ from 'lodash'
 import { Editor } from 'slate-react'
 import Prism from 'prismjs'
 import React from 'react'
@@ -50,7 +51,8 @@ function handleHotKey (event, change) {
       change.toggleMark(type)
       return true
     } else {
-      change.setBlock(type)
+      const anyNotParagraph = change.value.blocks.some(block => block.type !== 'paragraph')
+      change.setBlock(anyNotParagraph ? 'paragraph' : type)
       return true
     }
   }
@@ -76,7 +78,18 @@ function handleNewLine (event, change) {
 }
 
 function handleAutoComplete (event, change) {
+  console.log(event.key)
+  if (event.key === 'Tab') {
+    event.preventDefault()
+    change.insertText('  ')
+  }
   return
+}
+
+function codeTokenize (language = 'js', text) {
+  const grammar = Prism.languages[language]
+  const tokens = Prism.tokenize(text, grammar)
+  const decorations = []
 }
 
 export default class Wysiwug extends React.Component {
@@ -144,8 +157,50 @@ export default class Wysiwug extends React.Component {
   }
 
   decorateNode = (node) => {
+    if (node.type === 'paragraph') {
+      const text = node.nodes.first()
+      const childrenLeaves = text.getLeaves().toArray()
+      const decorations = []
+      const grammar = Prism.languages['js']
+      // const codeNodes = childrenLeaves.filter(leaf => {
+      //   return leaf.marks.size > 0 && leaf.marks.first().type === 'code-line'
+      // })
+      // codeNodes.forEach(node => {
+      //   codeTokenize('js', node.text)
+      // })
+      let startOffset = 0
+      let endOffset = 0
+      let start = 0
+      childrenLeaves.forEach(leaf => {
+        const {marks} = leaf
+        window.marks = marks
+        if (marks.size > 0 && _.some(marks.toArray(), m => m.type === 'code-line')) {
+          // console.log('code ', leaf.text)
+          const tokens = Prism.tokenize(leaf.text, grammar)
+          let start = 0
+          let end = 0
+          for (const token of tokens) {
+            const content = typeof token === 'string' ? token : token.content
+            if (typeof token === 'string') {
+              start = end += token.length
+            } else {
+              decorations.push({
+                anchorKey: text.key,
+                anchorOffset: startOffset + start,
+                focusKey: text.key,
+                focusOffset: (startOffset + start + token.content.length),
+                marks: [{type: token.type}]
+              })
+              start = end += token.content.length
+            }
+          }
+        }
+        startOffset += leaf.text.length
+      })
+      console.log(decorations)
+      return decorations
+    }
     if (node.type !== 'code') return
-
     const language = 'js'
     const texts = node.getTexts().toArray()
     const string = texts.map(t => t.text).join('\n')
@@ -187,28 +242,21 @@ export default class Wysiwug extends React.Component {
           focusOffset: endOffset,
           marks: [{ type: token.type }],
         }
-
         decorations.push(range)
       }
 
       start = end
     }
-
+    console.log(decorations)
     return decorations
   }
 
-  onSelection () {
-    console.log(333333333)
+  onSelect (event, change) {
+    console.log(event, change)
+    window.change = change
   }
 
   onKeyDown = (event, change) => {
-    const {activeMarks} = change.value
-    if (activeMarks) {
-      const marks = activeMarks.toArray()
-      if (marks.length > 0) {
-        console.log(marks[0].type, marks[0].data)
-      }
-    }
     if (event.metaKey) {
       return handleHotKey(event, change)
     } else if (event.key === 'Enter') {
@@ -224,7 +272,7 @@ export default class Wysiwug extends React.Component {
         <MenuList iconList={iconList} onClick={this.handleMenuClick}/>
         <Menu
           menuRef={this.menuRef}
-          value={this.state.value}
+          value={this.props.value}
           onChange={this.onChange}
         />
         <Editor
@@ -234,9 +282,11 @@ export default class Wysiwug extends React.Component {
           onKeyDown={this.onKeyDown}
           onSelection={this.onSelection}
           schema={schema}
+          onSelect={this.onSelect}
           onChange={this.onChange}
           renderMark={this.renderMark}
           renderNode={this.renderNode}
+          decorateMark={this.renderMark}
           decorateNode={this.decorateNode}
         />
       </div>
@@ -249,7 +299,15 @@ export default class Wysiwug extends React.Component {
   }
 
   renderMark = (props) => {
-    if (markGroup[props.mark.type]) return markGroup[props.mark.type].render(props)
+    // let activeMarks = this.props.value.activeMarks
+    // let isMath = false
+    // if (activeMarks) {
+    //   activeMarks = activeMarks.toArray()
+    //   if (activeMarks.length > 0) {
+    //     isMath = _.some(activeMarks, (mark) => mark.type === 'math')
+    //   }
+    // }
+    if (markGroup[props.mark.type]) return markGroup[props.mark.type].render(props, true)
   }
 
 }

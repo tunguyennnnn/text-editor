@@ -64,11 +64,11 @@ export const blockGroup = {
     render: (props, focus) => {
       const res = !focus ? ReactHtmlParser(katex.renderToString('c = \\pm\\sqrt{a^2 + b^2}')) : props.children
       return (
-        <p class='math-block'>
+        <div class='math-block'>
           <span class='math-block-span'>
             {res}
           </span>
-        </p>
+        </div>
       )
     }
   },
@@ -114,10 +114,16 @@ export const markGroup = {
     render: (props) => <em>{props.children}</em>,
     serialize: (children) => <em>{children}</em>
   },
-  math: {
+  'math-inline': {
     key: 'm',
-    render: props => {
-      return <span class='highlight-line'>{props.children}</span>
+    render: (props, focus) => {
+      const res = !focus ? ReactHtmlParser(katex.renderToString('c = \\pm\\sqrt{a^2 + b^2}')) : props.children
+      return <code class='highlight-line'>{res}</code>
+    }
+  },
+  'code-line': {
+    render: (props) => {
+      return <code style={{background: '##DCDCDC'}}>{props.children}</code>
     }
   }
 }
@@ -125,11 +131,13 @@ export const markGroup = {
 export const mapping = {
   b: ['node', 'bold'],
   i: ['node', 'italic'],
+  l: ['node', 'math-inline'],
   p: ['block', 'paragraph'],
-  c: ['block', 'code'],
+  c: ['node', 'code-line'],
+  d: ['block', 'code'],
   t: ['block', 'title'],
   s: ['block', 'section'],
-  m: ['node', 'math']
+  m: ['block', 'math']
 }
 export const markPlugins = _.keys(markGroup).map((type) => markHotKey({type, key: markGroup[type].key}))
 export const blockPlugins = _.keys(blockGroup).map((type) => nodeHotKey({type, key: blockGroup[type].key}))
@@ -180,7 +188,7 @@ export const schema = {
       { types: ['title'], min: 1, max: 1 },
       { types: ['paragraph', 'section', 'code', 'image', 'math'], min: 5 }
     ],
-    last: {type: ['paragraph']},
+    last: {type: ['paragraph'], min: 1},
     normalize: (change, reason, { node, child, index }) => {
       console.log(reason, child, child, index)
       switch (reason) {
@@ -192,6 +200,54 @@ export const schema = {
           return change.insertNodeByKey(node.key, index, block)
         }
       }
+    }
+  },
+  blocks: {
+    // paragraph: {
+    //   nodes: [
+    //     { types: ['bold', 'italic', 'text', 'code', 'math', 'comment', 'punctuation', 'function', 'keyword'] }
+    //   ]
+    // },
+    //   ]
+    // },
+    // code: {
+    //   nodes: [
+    //     {types: ['text', 'comment', 'keyword', 'punctuation', 'function']}
+    //   ]
+    // },
+    normalize: (change, reason, {node, child, index}) => {
+      console.log(reason)
+    }
+  },
+  inlines: {
+    'code-line': {
+      parent: {types: ['paragraph']},
+      nodes: [{kinds: ['text']}]
+    },
+    'math-inline': {
+      parent: {types: ['paragraph']},
+      nodes: [{kinds: ['text']}]
+    },
+    bold: {
+      parent: {types: ['paragraph']}
+    },
+    italic: {
+      parent: {types: ['paragraph']}
+    },
+    comment: {
+      parent: {type: ['code', 'code-line']}
+    },
+    keyword: {
+      parent: {type: ['code', 'code-line']}
+    },
+    punctuation: {
+      parent: {type: ['code', 'code-line']}
+    },
+    function: {
+      parent: {type: ['code', 'code-line']}
+    },
+    normalize: (change, reason, { node, child, index }) => {
+      console.log(change, reason, node, child, index)
     }
   }
 }
